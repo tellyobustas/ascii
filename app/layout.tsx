@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
+import { AsciiCloudBackground } from "@/components/ascii-background/ascii-cloud-background";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -27,7 +28,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={geistMono.variable + " antialiased"}>{children}</body>
+      <body className={geistMono.variable + " antialiased"}>
+        <AsciiCloudBackground />
+        <div className="relative z-10">{children}</div>
+      </body>
     </html>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ASCIIBackground } from "@/components/ascii-background/ascii-background";
 import { GenerateButton } from "@/components/editor/generate-button";
 import { OutputPreview } from "@/components/editor/output-preview";
 import { PresetButton } from "@/components/editor/preset-button";
@@ -57,9 +56,7 @@ export function MiniAppHome() {
   );
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-black text-ascii-white">
-      <ASCIIBackground />
-
+    <main className="relative min-h-dvh overflow-hidden bg-transparent text-ascii-white">
       <section className="relative z-10 mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <header className="border border-ascii-green/45 bg-black/88 p-3 shadow-[0_0_0_1px_rgba(0,0,0,0.95),0_0_24px_rgba(0,255,102,0.08)]">
           <div className="flex items-center justify-between gap-3 border-b border-ascii-green/25 pb-2">
