@@ -2,7 +2,7 @@
 
 ASCII — Telegram Mini App и Telegram Bot для будущих генераторов текста, изображений и видео в ASCII / Matrix / terminal стиле.
 
-Текущий этап: базовый setup проекта. Генераторы, Telegram-валидация, отправка результатов и video worker будут добавляться следующими этапами.
+Текущий этап: базовый setup проекта и Telegram bot с кнопкой OPEN ASCII. Генераторы, Telegram-валидация, отправка результатов и video worker будут добавляться следующими этапами.
 
 ## Стек
 
@@ -54,6 +54,8 @@ Bot worker:
 
     npm run bot
 
+Команда /start отправляет inline-кнопку OPEN ASCII. URL Mini App берётся из TELEGRAM_WEBAPP_URL, затем из NEXT_PUBLIC_APP_URL.
+
 Проверки:
 
     npm run lint
@@ -61,13 +63,17 @@ Bot worker:
 
 ## Telegram Mini App
 
+Уже добавлено:
+
+1. Bot worker на grammY.
+2. Команда /start.
+3. Inline-кнопка OPEN ASCII через web_app.
+
 Следующие этапы добавят:
 
-1. Создание Telegram Bot через BotFather.
-2. Кнопку OPEN ASCII через web_app.
-3. Вызов Telegram.WebApp.ready() и Telegram.WebApp.expand().
-4. Серверную проверку initData через BOT_TOKEN.
-5. Отправку PNG/MP4 результата пользователю из backend/bot слоя.
+1. Вызов Telegram.WebApp.ready() и Telegram.WebApp.expand().
+2. Серверную проверку initData через BOT_TOKEN.
+3. Отправку PNG/MP4 результата пользователю из backend/bot слоя.
 
 Для локального теста Mini App в Telegram обычно понадобится публичный HTTPS URL, например через ngrok:
 
