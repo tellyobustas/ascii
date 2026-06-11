@@ -6,129 +6,530 @@ type AsciiCloudBackgroundConfig = {
   cloudCount: number;
   particlesPerCloud: number;
   speed: number;
+  turbulence: number;
+  cohesionStrength: number;
+  flowStrength: number;
+  trailAmount: number;
   opacity: {
     min: number;
     max: number;
   };
-  palette: string[];
-  symbols: string;
-  turbulence: number;
-  fontSize: {
-    min: number;
-    max: number;
+  fontSizeMin: number;
+  fontSizeMax: number;
+  glyphs: {
+    far: string;
+    mid: string;
+    near: string;
   };
+  colors: string[];
+};
+
+type CloudAnchor = {
+  aspect: number;
+  depth: number;
+  driftAngle: number;
+  phase: number;
+  radius: number;
+  rotation: number;
+  rotationVelocity: number;
+  scaleX: number;
+  scaleY: number;
+  vx: number;
+  vy: number;
+  x: number;
+  y: number;
 };
 
 type Particle = {
   cloudIndex: number;
-  char: string;
   color: string;
-  flicker: number;
+  depth: number;
+  edge: number;
+  fontSize: number;
+  glyph: string;
+  glyphPool: string[];
+  localIndex: number;
+  localX: number;
+  localY: number;
+  nextGlyphAt: number;
   opacity: number;
   phase: number;
-  size: number;
   vx: number;
   vy: number;
   x: number;
   y: number;
 };
 
-type Cloud = {
-  phase: number;
-  radius: number;
-  vx: number;
-  vy: number;
-  x: number;
-  y: number;
+type Scene = {
+  clouds: CloudAnchor[];
+  particles: Particle[];
+  particlesByCloud: Particle[][];
 };
 
-const DEFAULT_CONFIG: AsciiCloudBackgroundConfig = {
-  cloudCount: 5,
-  particlesPerCloud: 30,
+const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
+  cloudCount: 4,
+  particlesPerCloud: 132,
   speed: 0.34,
+  turbulence: 0.88,
+  cohesionStrength: 0.0068,
+  flowStrength: 0.066,
+  trailAmount: 0.2,
   opacity: {
-    min: 0.08,
-    max: 0.25,
+    min: 0.72,
+    max: 1,
   },
-  palette: ["#00ff66", "#0a5f31", "#f2f2f2", "#7f8f84"],
-  symbols: "./\\|_-+=*#%@<>[]{}01",
-  turbulence: 0.13,
-  fontSize: {
-    min: 10,
-    max: 18,
+  fontSizeMin: 9,
+  fontSizeMax: 20,
+  glyphs: {
+    far: ".·'\"-_",
+    mid: ".·'\"^-_/\\|<>+xo",
+    near: "*+xo01<>/\\",
   },
+  colors: [
+    "rgba(0, 255, 120, 0.08)",
+    "rgba(80, 255, 160, 0.16)",
+    "rgba(190, 255, 220, 0.22)",
+    "rgba(255, 255, 255, 0.16)",
+  ],
+};
+
+const MOBILE_CONFIG: AsciiCloudBackgroundConfig = {
+  ...DESKTOP_CONFIG,
+  cloudCount: 3,
+  particlesPerCloud: 82,
+  speed: 0.28,
+  flowStrength: 0.052,
+  trailAmount: 0.22,
+  fontSizeMin: 8,
+  fontSizeMax: 16,
+};
+
+const REDUCED_MOTION_CONFIG: AsciiCloudBackgroundConfig = {
+  ...MOBILE_CONFIG,
+  cloudCount: 2,
+  particlesPerCloud: 52,
+  speed: 0.05,
+  turbulence: 0.18,
+  flowStrength: 0.012,
+  trailAmount: 0.32,
 };
 
 const MOBILE_QUERY = "(max-width: 700px)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const TAU = Math.PI * 2;
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
+}
+
+function randomNormalish() {
+  return (
+    Math.random() +
+    Math.random() +
+    Math.random() +
+    Math.random() -
+    2
+  ) / 2;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function pick<T>(items: T[]) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function wrap(value: number, max: number, margin: number) {
-  if (value < -margin) return max + margin;
-  if (value > max + margin) return -margin;
-  return value;
+function pickGlyph(pool: string[]) {
+  return pick(pool);
 }
 
-function resolveConfig(isMobile: boolean): AsciiCloudBackgroundConfig {
-  if (!isMobile) return DEFAULT_CONFIG;
+function resolveConfig(isMobile: boolean, reducedMotion: boolean) {
+  if (reducedMotion) return REDUCED_MOTION_CONFIG;
+  return isMobile ? MOBILE_CONFIG : DESKTOP_CONFIG;
+}
+
+function scalarNoise(x: number, y: number, time: number, phase: number) {
+  const nx = x * 0.0027;
+  const ny = y * 0.0027;
+
+  return (
+    Math.sin(nx * 1.7 + ny * 0.62 + time * 0.00019 + phase) +
+    Math.cos(nx * -0.72 + ny * 1.45 - time * 0.00017 + phase * 0.7) +
+    Math.sin((nx + ny) * 1.1 + time * 0.00013 + phase * 1.9) * 0.7
+  );
+}
+
+function curlNoise(x: number, y: number, time: number, phase: number) {
+  const epsilon = 28;
+  const left = scalarNoise(x - epsilon, y, time, phase);
+  const right = scalarNoise(x + epsilon, y, time, phase);
+  const top = scalarNoise(x, y - epsilon, time, phase);
+  const bottom = scalarNoise(x, y + epsilon, time, phase);
+  const dx = (right - left) / (epsilon * 2);
+  const dy = (bottom - top) / (epsilon * 2);
+  const curlX = dy;
+  const curlY = -dx;
+  const length = Math.hypot(curlX, curlY) || 1;
 
   return {
-    ...DEFAULT_CONFIG,
-    cloudCount: 4,
-    particlesPerCloud: 18,
-    speed: 0.28,
-    fontSize: {
-      min: 9,
-      max: 15,
-    },
+    x: curlX / length,
+    y: curlY / length,
   };
 }
 
-function createScene(width: number, height: number, config: AsciiCloudBackgroundConfig) {
-  const clouds: Cloud[] = [];
-  const particles: Particle[] = [];
-  const chars = Array.from(config.symbols);
+function createCloud(index: number, width: number, height: number): CloudAnchor {
+  const depth = index === 0 ? 1 : randomBetween(0.48, 0.92);
+  const radius = randomBetween(
+    Math.min(width, height) * 0.18,
+    Math.min(width, height) * 0.34,
+  );
+  const driftAngle =
+    index === 0
+      ? randomBetween(-0.25, 0.25)
+      : randomBetween(0, TAU);
+
+  return {
+    aspect: randomBetween(1.85, 3.2),
+    depth,
+    driftAngle,
+    phase: randomBetween(0, TAU),
+    radius,
+    rotation: randomBetween(-0.45, 0.45),
+    rotationVelocity: randomBetween(-0.00095, 0.00095),
+    scaleX: 1,
+    scaleY: 1,
+    vx: Math.cos(driftAngle) * randomBetween(0.18, 0.46) * depth,
+    vy: Math.sin(driftAngle) * randomBetween(0.08, 0.28) * depth,
+    x:
+      index === 0
+        ? randomBetween(width * 0.08, width * 0.28)
+        : randomBetween(width * 0.08, width * 0.92),
+    y:
+      index === 0
+        ? randomBetween(height * 0.18, height * 0.42)
+        : randomBetween(height * 0.12, height * 0.88),
+  };
+}
+
+function createParticle(
+  cloud: CloudAnchor,
+  cloudIndex: number,
+  localIndex: number,
+  config: AsciiCloudBackgroundConfig,
+  now: number,
+): Particle {
+  const lobe = pick([-0.58, -0.16, 0.18, 0.56]);
+  const u = clamp(lobe + randomNormalish() * 0.38, -1, 1);
+  const envelope = Math.pow(Math.max(0.05, 1 - Math.abs(u)), 0.58);
+  const edgeScatter = Math.random() < 0.22 ? randomBetween(0.72, 1.18) : randomBetween(0.08, 0.76);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const curve =
+    Math.sin((u + 0.2) * Math.PI * 1.2 + cloud.phase) *
+    cloud.radius *
+    0.16;
+  const localX =
+    u * cloud.radius * cloud.aspect +
+    randomNormalish() * cloud.radius * 0.13;
+  const localY =
+    side * edgeScatter * envelope * cloud.radius * 0.64 +
+    curve +
+    randomNormalish() * cloud.radius * 0.08;
+  const edge = clamp(Math.abs(u) * 0.64 + edgeScatter * 0.54, 0, 1);
+  const depth = pick([0.55, 0.74, 0.88, 1, 1.16]);
+  const glyphPool =
+    depth < 0.7
+      ? Array.from(config.glyphs.far)
+      : depth > 1
+        ? Array.from(config.glyphs.near)
+        : Array.from(config.glyphs.mid);
+  const fontSize =
+    randomBetween(config.fontSizeMin, config.fontSizeMax) *
+    depth *
+    randomBetween(0.86, 1.08);
+  const opacity =
+    randomBetween(config.opacity.min, config.opacity.max) *
+    (0.58 + depth * 0.42) *
+    (1 - edge * 0.22);
+
+  return {
+    cloudIndex,
+    color: pick(config.colors),
+    depth,
+    edge,
+    fontSize,
+    glyph: pickGlyph(glyphPool),
+    glyphPool,
+    localIndex,
+    localX,
+    localY,
+    nextGlyphAt: now + randomBetween(500, 2000),
+    opacity,
+    phase: randomBetween(0, TAU),
+    vx: cloud.vx + randomNormalish() * 0.2,
+    vy: cloud.vy + randomNormalish() * 0.16,
+    x: cloud.x + localX * 0.82 + randomNormalish() * 22,
+    y: cloud.y + localY * 0.82 + randomNormalish() * 18,
+  };
+}
+
+function createScene(
+  width: number,
+  height: number,
+  config: AsciiCloudBackgroundConfig,
+): Scene {
+  const clouds: CloudAnchor[] = [];
+  const particlesByCloud: Particle[][] = [];
+  const now = performance.now();
 
   for (let cloudIndex = 0; cloudIndex < config.cloudCount; cloudIndex += 1) {
-    const cloud: Cloud = {
-      phase: randomBetween(0, Math.PI * 2),
-      radius: randomBetween(70, Math.min(width, height) * 0.2),
-      vx: randomBetween(-0.45, 0.45) * config.speed,
-      vy: randomBetween(-0.24, 0.24) * config.speed,
-      x: randomBetween(width * 0.08, width * 0.92),
-      y: randomBetween(height * 0.08, height * 0.92),
-    };
+    const cloud = createCloud(cloudIndex, width, height);
+    const particleCount = Math.round(
+      config.particlesPerCloud * randomBetween(0.78, 1.18) * cloud.depth,
+    );
 
     clouds.push(cloud);
+    particlesByCloud.push(
+      Array.from({ length: particleCount }, (_, localIndex) =>
+        createParticle(cloud, cloudIndex, localIndex, config, now),
+      ),
+    );
+  }
 
-    for (let index = 0; index < config.particlesPerCloud; index += 1) {
-      const angle = randomBetween(0, Math.PI * 2);
-      const distance = randomBetween(0, cloud.radius);
+  const particles = particlesByCloud
+    .flat()
+    .sort((first, second) => first.depth - second.depth);
 
-      particles.push({
-        char: pick(chars),
-        cloudIndex,
-        color: pick(config.palette),
-        flicker: randomBetween(0.018, 0.065),
-        opacity: randomBetween(config.opacity.min, config.opacity.max),
-        phase: randomBetween(0, Math.PI * 2),
-        size: randomBetween(config.fontSize.min, config.fontSize.max),
-        vx: cloud.vx + randomBetween(-0.28, 0.28),
-        vy: cloud.vy + randomBetween(-0.18, 0.18),
-        x: cloud.x + Math.cos(angle) * distance,
-        y: cloud.y + Math.sin(angle) * distance * 0.62,
-      });
+  return {
+    clouds,
+    particles,
+    particlesByCloud,
+  };
+}
+
+function rotatePoint(x: number, y: number, angle: number) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  return {
+    x: x * cos - y * sin,
+    y: x * sin + y * cos,
+  };
+}
+
+function targetForParticle(
+  particle: Particle,
+  cloud: CloudAnchor,
+  time: number,
+) {
+  const pulse = Math.sin(time * 0.00042 + cloud.phase);
+  const innerWave = Math.sin(
+    time * 0.00068 + particle.phase + particle.localX * 0.008,
+  );
+  const edgeLoose = particle.edge * Math.sin(time * 0.0009 + particle.phase);
+  const localX =
+    particle.localX *
+    cloud.scaleX *
+    (1 + pulse * 0.08 + innerWave * 0.025);
+  const localY =
+    particle.localY *
+      cloud.scaleY *
+      (1 - pulse * 0.05 + Math.cos(time * 0.00061 + particle.phase) * 0.035) +
+    edgeLoose * cloud.radius * 0.08;
+  const rotated = rotatePoint(localX, localY, cloud.rotation);
+
+  return {
+    x: cloud.x + rotated.x,
+    y: cloud.y + rotated.y,
+  };
+}
+
+function wrapCloud(
+  cloud: CloudAnchor,
+  cloudParticles: Particle[],
+  width: number,
+  height: number,
+) {
+  const margin = cloud.radius * cloud.aspect + 140;
+  let shiftX = 0;
+  let shiftY = 0;
+
+  if (cloud.x < -margin) shiftX = width + margin * 2;
+  if (cloud.x > width + margin) shiftX = -(width + margin * 2);
+  if (cloud.y < -margin) shiftY = height + margin * 2;
+  if (cloud.y > height + margin) shiftY = -(height + margin * 2);
+
+  if (shiftX === 0 && shiftY === 0) return;
+
+  cloud.x += shiftX;
+  cloud.y += shiftY;
+
+  for (const particle of cloudParticles) {
+    particle.x += shiftX;
+    particle.y += shiftY;
+  }
+}
+
+function updateCloud(
+  cloud: CloudAnchor,
+  time: number,
+  frameScale: number,
+  config: AsciiCloudBackgroundConfig,
+) {
+  const flow = curlNoise(cloud.x, cloud.y, time, cloud.phase);
+  const driftX = Math.cos(cloud.driftAngle + Math.sin(time * 0.00008 + cloud.phase) * 0.8);
+  const driftY = Math.sin(cloud.driftAngle + Math.cos(time * 0.00007 + cloud.phase) * 0.55);
+  const desiredVx = (driftX * 0.72 + flow.x * 0.28) * config.speed * cloud.depth;
+  const desiredVy = (driftY * 0.72 + flow.y * 0.28) * config.speed * cloud.depth;
+
+  cloud.vx += (desiredVx - cloud.vx) * 0.012 * frameScale;
+  cloud.vy += (desiredVy - cloud.vy) * 0.012 * frameScale;
+  cloud.x += cloud.vx * frameScale;
+  cloud.y += cloud.vy * frameScale;
+  cloud.rotation +=
+    (cloud.rotationVelocity + Math.sin(time * 0.00011 + cloud.phase) * 0.00018) *
+    frameScale;
+  cloud.scaleX = 1 + Math.sin(time * 0.00022 + cloud.phase) * 0.14;
+  cloud.scaleY = 1 + Math.cos(time * 0.00019 + cloud.phase * 1.7) * 0.11;
+}
+
+function updateParticle(
+  particle: Particle,
+  cloud: CloudAnchor,
+  cloudParticles: Particle[],
+  time: number,
+  frameScale: number,
+  config: AsciiCloudBackgroundConfig,
+  reducedMotion: boolean,
+) {
+  const target = targetForParticle(particle, cloud, time);
+  const flow = curlNoise(
+    particle.x * (0.88 + particle.depth * 0.12),
+    particle.y * (0.88 + particle.depth * 0.12),
+    time,
+    particle.phase + cloud.phase,
+  );
+  let separationX = 0;
+  let separationY = 0;
+  let alignmentX = 0;
+  let alignmentY = 0;
+  let neighborCount = 0;
+  const checks = Math.min(12, cloudParticles.length - 1);
+  const stride = 7 + (particle.localIndex % 5);
+
+  for (let offset = 1; offset <= checks; offset += 1) {
+    const other =
+      cloudParticles[(particle.localIndex + offset * stride) % cloudParticles.length];
+    if (!other || other === particle) continue;
+
+    const dx = other.x - particle.x;
+    const dy = other.y - particle.y;
+    const distanceSquared = dx * dx + dy * dy;
+    const separationRadius = 15 + particle.fontSize * 0.95;
+
+    if (distanceSquared > 0 && distanceSquared < separationRadius * separationRadius) {
+      const distance = Math.sqrt(distanceSquared);
+      const push = (separationRadius - distance) / separationRadius;
+      separationX -= (dx / distance) * push;
+      separationY -= (dy / distance) * push;
+    }
+
+    if (distanceSquared < 105 * 105) {
+      alignmentX += other.vx;
+      alignmentY += other.vy;
+      neighborCount += 1;
     }
   }
 
-  return { clouds, particles };
+  if (neighborCount > 0) {
+    alignmentX = alignmentX / neighborCount - particle.vx;
+    alignmentY = alignmentY / neighborCount - particle.vy;
+  }
+
+  const targetStrength =
+    config.cohesionStrength * (1.16 - particle.edge * 0.42) * (0.82 + particle.depth * 0.22);
+  const flowStrength = config.flowStrength * particle.depth;
+  const looseEdge = 1 + particle.edge * 0.36;
+
+  particle.vx +=
+    ((target.x - particle.x) * targetStrength +
+      flow.x * flowStrength * looseEdge +
+      separationX * 0.052 +
+      alignmentX * 0.016) *
+    frameScale;
+  particle.vy +=
+    ((target.y - particle.y) * targetStrength +
+      flow.y * flowStrength * looseEdge +
+      separationY * 0.052 +
+      alignmentY * 0.016) *
+    frameScale;
+
+  particle.vx *= reducedMotion ? 0.88 : 0.935;
+  particle.vy *= reducedMotion ? 0.88 : 0.935;
+
+  const maxSpeed = (reducedMotion ? 0.22 : 1.25) * particle.depth;
+  const speed = Math.hypot(particle.vx, particle.vy);
+  if (speed > maxSpeed) {
+    particle.vx = (particle.vx / speed) * maxSpeed;
+    particle.vy = (particle.vy / speed) * maxSpeed;
+  }
+
+  particle.x += particle.vx * frameScale;
+  particle.y += particle.vy * frameScale;
+
+  if (time > particle.nextGlyphAt) {
+    particle.glyph = pickGlyph(particle.glyphPool);
+    particle.nextGlyphAt = time + randomBetween(650, 2200);
+  }
+}
+
+function drawScene(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  width: number,
+  height: number,
+  config: AsciiCloudBackgroundConfig,
+  fontFamily: string,
+) {
+  context.globalCompositeOperation = "source-over";
+  context.fillStyle = `rgba(0, 0, 0, ${config.trailAmount})`;
+  context.fillRect(0, 0, width, height);
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  for (const particle of scene.particles) {
+    const flicker =
+      Math.sin(time * 0.0015 + particle.phase) * 0.026 +
+      Math.sin(time * 0.00047 + particle.phase * 2.3) * 0.018;
+    const shimmer = Math.sin(time * 0.001 + particle.localX * 0.01 + particle.phase);
+    const alpha = clamp(
+      particle.opacity + flicker + (shimmer > 0.94 ? 0.045 : 0),
+      config.opacity.min,
+      config.opacity.max * 1.18,
+    );
+    const jitterX =
+      Math.sin(time * 0.0013 + particle.phase + particle.localY * 0.01) *
+      0.54 *
+      particle.depth;
+    const jitterY =
+      Math.cos(time * 0.0011 + particle.phase + particle.localX * 0.008) *
+      0.54 *
+      particle.depth;
+    const rotation =
+      Math.sin(time * 0.00062 + particle.phase) * 0.08 * particle.depth;
+
+    context.save();
+    context.translate(particle.x + jitterX, particle.y + jitterY);
+    context.rotate(rotation);
+    context.globalAlpha = alpha;
+    context.fillStyle = particle.color;
+    context.font = `${particle.fontSize}px ${fontFamily}`;
+    context.fillText(particle.glyph, 0, 0);
+    context.restore();
+  }
+
+  context.globalAlpha = 1;
 }
 
 export function AsciiCloudBackground() {
@@ -138,17 +539,22 @@ export function AsciiCloudBackground() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const context = canvas.getContext("2d", { alpha: true });
+    const context = canvas.getContext("2d", { alpha: false });
     if (!context) return;
 
+    const mobileQuery = window.matchMedia(MOBILE_QUERY);
+    const reducedMotionQuery = window.matchMedia(REDUCED_MOTION_QUERY);
     let width = 0;
     let height = 0;
     let animationFrame = 0;
     let lastTime = performance.now();
-    let isMobile = window.matchMedia(MOBILE_QUERY).matches;
-    let reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY).matches;
-    let config = resolveConfig(isMobile);
+    let isMobile = mobileQuery.matches;
+    let reducedMotion = reducedMotionQuery.matches;
+    let config = resolveConfig(isMobile, reducedMotion);
     let scene = createScene(1, 1, config);
+    let fontFamily =
+      getComputedStyle(document.body).fontFamily ||
+      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -159,150 +565,62 @@ export function AsciiCloudBackground() {
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.fillStyle = "rgb(0, 0, 0)";
+      context.fillRect(0, 0, width, height);
 
-      isMobile = window.matchMedia(MOBILE_QUERY).matches;
-      reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY).matches;
-      config = resolveConfig(isMobile);
+      isMobile = mobileQuery.matches;
+      reducedMotion = reducedMotionQuery.matches;
+      config = resolveConfig(isMobile, reducedMotion);
       scene = createScene(width, height, config);
+      fontFamily =
+        getComputedStyle(document.body).fontFamily ||
+        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
     };
 
-    const update = (delta: number, time: number) => {
-      const timeScale = reducedMotion ? 0.05 : 1;
-      const frameScale = Math.min(delta / 16.67, 2.2) * timeScale;
-      const margin = 90;
-
-      for (const cloud of scene.clouds) {
-        const driftX = Math.cos(time * 0.00012 + cloud.phase) * 0.014;
-        const driftY = Math.sin(time * 0.0001 + cloud.phase) * 0.011;
-
-        cloud.vx += driftX * frameScale;
-        cloud.vy += driftY * frameScale;
-        cloud.vx *= 0.996;
-        cloud.vy *= 0.996;
-        cloud.x = wrap(cloud.x + cloud.vx * frameScale, width, margin);
-        cloud.y = wrap(cloud.y + cloud.vy * frameScale, height, margin);
-      }
-
-      // Small boids pass per cloud: separation, alignment, cohesion and a soft
-      // pull to the moving cloud center keep each flock alive without chaos.
-      for (const particle of scene.particles) {
-        const cloud = scene.clouds[particle.cloudIndex];
-        let separationX = 0;
-        let separationY = 0;
-        let alignmentX = 0;
-        let alignmentY = 0;
-        let cohesionX = 0;
-        let cohesionY = 0;
-        let neighborCount = 0;
-
-        for (const other of scene.particles) {
-          if (other === particle || other.cloudIndex !== particle.cloudIndex) {
-            continue;
-          }
-
-          const dx = other.x - particle.x;
-          const dy = other.y - particle.y;
-          const distanceSquared = dx * dx + dy * dy;
-
-          if (distanceSquared > 0 && distanceSquared < 52 * 52) {
-            const distance = Math.sqrt(distanceSquared);
-            separationX -= dx / distance;
-            separationY -= dy / distance;
-          }
-
-          if (distanceSquared < 118 * 118) {
-            alignmentX += other.vx;
-            alignmentY += other.vy;
-            cohesionX += other.x;
-            cohesionY += other.y;
-            neighborCount += 1;
-          }
-        }
-
-        if (neighborCount > 0) {
-          alignmentX = alignmentX / neighborCount - particle.vx;
-          alignmentY = alignmentY / neighborCount - particle.vy;
-          cohesionX = cohesionX / neighborCount - particle.x;
-          cohesionY = cohesionY / neighborCount - particle.y;
-        }
-
-        const turbulenceX =
-          Math.cos(time * 0.0011 + particle.phase + particle.y * 0.015) *
-          config.turbulence;
-        const turbulenceY =
-          Math.sin(time * 0.0009 + particle.phase + particle.x * 0.012) *
-          config.turbulence;
-        const centerPullX = (cloud.x - particle.x) * 0.00075;
-        const centerPullY = (cloud.y - particle.y) * 0.00075;
-
-        particle.vx +=
-          (separationX * 0.018 +
-            alignmentX * 0.006 +
-            cohesionX * 0.00022 +
-            centerPullX +
-            turbulenceX * 0.012) *
-          frameScale;
-        particle.vy +=
-          (separationY * 0.018 +
-            alignmentY * 0.006 +
-            cohesionY * 0.00022 +
-            centerPullY +
-            turbulenceY * 0.012) *
-          frameScale;
-
-        const maxSpeed = reducedMotion ? 0.18 : 0.82;
-        const speed = Math.hypot(particle.vx, particle.vy);
-        if (speed > maxSpeed) {
-          particle.vx = (particle.vx / speed) * maxSpeed;
-          particle.vy = (particle.vy / speed) * maxSpeed;
-        }
-
-        particle.x = wrap(particle.x + particle.vx * frameScale, width, margin);
-        particle.y = wrap(particle.y + particle.vy * frameScale, height, margin);
-      }
-    };
-
-    const draw = (time: number) => {
-      context.clearRect(0, 0, width, height);
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-
-      for (const particle of scene.particles) {
-        const flicker =
-          Math.sin(time * particle.flicker + particle.phase) * 0.035;
-        const jitterX = Math.cos(time * 0.002 + particle.phase) * 0.85;
-        const jitterY = Math.sin(time * 0.0017 + particle.phase) * 0.85;
-        const rotation = Math.sin(time * 0.0008 + particle.phase) * 0.08;
-
-        context.save();
-        context.translate(particle.x + jitterX, particle.y + jitterY);
-        context.rotate(rotation);
-        context.globalAlpha = Math.max(
-          config.opacity.min,
-          Math.min(config.opacity.max, particle.opacity + flicker),
-        );
-        context.fillStyle = particle.color;
-        context.font = `${particle.size}px var(--font-geist-mono), ui-monospace, monospace`;
-        context.fillText(particle.char, 0, 0);
-        context.restore();
-      }
-    };
+    const handleMediaChange = () => resize();
 
     const tick = (time: number) => {
       const delta = time - lastTime;
       lastTime = time;
-      update(delta, time);
-      draw(time);
+      const motionScale = reducedMotion ? 0.16 : 1;
+      const frameScale = Math.min(delta / 16.67, 2.4) * motionScale;
+
+      for (let index = 0; index < scene.clouds.length; index += 1) {
+        const cloud = scene.clouds[index];
+        const cloudParticles = scene.particlesByCloud[index] ?? [];
+        updateCloud(cloud, time, frameScale, config);
+        wrapCloud(cloud, cloudParticles, width, height);
+      }
+
+      for (const particle of scene.particles) {
+        const cloud = scene.clouds[particle.cloudIndex];
+        const cloudParticles = scene.particlesByCloud[particle.cloudIndex] ?? [];
+        updateParticle(
+          particle,
+          cloud,
+          cloudParticles,
+          time,
+          frameScale,
+          config,
+          reducedMotion,
+        );
+      }
+
+      drawScene(context, scene, time, width, height, config, fontFamily);
       animationFrame = window.requestAnimationFrame(tick);
     };
 
     resize();
     animationFrame = window.requestAnimationFrame(tick);
     window.addEventListener("resize", resize);
+    mobileQuery.addEventListener("change", handleMediaChange);
+    reducedMotionQuery.addEventListener("change", handleMediaChange);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", resize);
+      mobileQuery.removeEventListener("change", handleMediaChange);
+      reducedMotionQuery.removeEventListener("change", handleMediaChange);
     };
   }, []);
 

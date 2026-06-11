@@ -59,7 +59,7 @@ export function MiniAppHome() {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-transparent text-ascii-white">
       <section className="relative z-10 mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <header className="border border-ascii-green/45 bg-black/88 p-3 shadow-[0_0_0_1px_rgba(0,0,0,0.95),0_0_24px_rgba(0,255,102,0.08)]">
+        <header className="border border-ascii-green/45 bg-black/82 p-3 shadow-[0_0_0_1px_rgba(0,0,0,0.95),0_0_24px_rgba(0,255,102,0.08)]">
           <div className="flex items-center justify-between gap-3 border-b border-ascii-green/25 pb-2">
             <StatusPill label="mini app" />
             <span className="text-[0.65rem] uppercase tracking-[0.18em] text-ascii-white/55">
@@ -83,7 +83,7 @@ export function MiniAppHome() {
 
         <nav
           aria-label="ASCII generator mode"
-          className="mt-3 grid grid-cols-3 border border-ascii-green/45 bg-black"
+          className="mt-3 grid grid-cols-3 border border-ascii-green/45 bg-black/90"
         >
           {tabs.map((tab) => {
             const isActive = tab === activeTab;
@@ -107,7 +107,7 @@ export function MiniAppHome() {
           })}
         </nav>
 
-        <section className="terminal-scanlines mt-3 border border-ascii-green/45 bg-black/90 p-3">
+        <section className="terminal-scanlines mt-3 border border-ascii-green/45 bg-black/86 p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[0.65rem] uppercase tracking-[0.18em] text-ascii-green/75">
@@ -120,7 +120,7 @@ export function MiniAppHome() {
             <StatusPill label={activeTab} />
           </div>
 
-          <div className="mt-4 border border-ascii-green/25 bg-black p-3">
+          <div className="mt-4 border border-ascii-green/25 bg-black/82 p-3">
             <p className="text-xs leading-5 text-ascii-white/72">
               {activeMeta.copy}
             </p>
