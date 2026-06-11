@@ -5,6 +5,7 @@ import { GenerateButton } from "@/components/editor/generate-button";
 import { OutputPreview } from "@/components/editor/output-preview";
 import { PresetButton } from "@/components/editor/preset-button";
 import { StatusPill } from "@/components/editor/status-pill";
+import { TextGenerator } from "@/components/editor/text-generator";
 import { UploadCard } from "@/components/editor/upload-card";
 
 const tabs = ["TEXT", "IMAGE", "VIDEO"] as const;
@@ -128,45 +129,38 @@ export function MiniAppHome() {
             </code>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {activeMeta.presets.map((preset, index) => (
-              <PresetButton active={index === 0} key={preset}>
-                {preset}
-              </PresetButton>
-            ))}
-          </div>
+          {activeTab === "TEXT" ? (
+            <TextGenerator />
+          ) : (
+            <>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {activeMeta.presets.map((preset, index) => (
+                  <PresetButton active={index === 0} key={preset}>
+                    {preset}
+                  </PresetButton>
+                ))}
+              </div>
 
-          <div className="mt-3">
-            {activeTab === "TEXT" ? (
-              <label className="block">
-                <span className="mb-2 block text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
-                  input buffer
+              <div className="mt-3">
+                <UploadCard label={"DROP " + activeTab.toLowerCase() + " FILE"} />
+              </div>
+
+              <div className="mt-3">
+                <OutputPreview label={activeTab + " PREVIEW"} />
+              </div>
+
+              <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
+                <StatusPill label={activeMeta.status} />
+                <span className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/45">
+                  idle
                 </span>
-                <textarea
-                  className="min-h-28 w-full resize-none border border-ascii-green/35 bg-black px-3 py-3 text-sm text-ascii-green placeholder:text-ascii-green/35 focus:border-ascii-green focus:ring-0"
-                  defaultValue="HELLO ASCII"
-                  spellCheck={false}
-                />
-              </label>
-            ) : (
-              <UploadCard label={"DROP " + activeTab.toLowerCase() + " FILE"} />
-            )}
-          </div>
+              </div>
 
-          <div className="mt-3">
-            <OutputPreview label={activeTab + " PREVIEW"} />
-          </div>
-
-          <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
-            <StatusPill label={activeMeta.status} />
-            <span className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/45">
-              idle
-            </span>
-          </div>
-
-          <div className="mt-4">
-            <GenerateButton disabled>generate soon</GenerateButton>
-          </div>
+              <div className="mt-4">
+                <GenerateButton disabled>generate soon</GenerateButton>
+              </div>
+            </>
+          )}
         </section>
 
         <footer className="mt-auto pt-4 text-center text-[0.62rem] uppercase tracking-[0.18em] text-ascii-white/38">
