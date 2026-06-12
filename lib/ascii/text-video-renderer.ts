@@ -125,14 +125,6 @@ function normalizeCanvasPreset(preset?: string): TextCanvasPresetId {
     : "telegramPost";
 }
 
-function escapeXml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function random(seed: number) {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
   return value - Math.floor(value);
@@ -145,7 +137,7 @@ function makeGlitchedLines(
   seed: number,
 ) {
   const pulse = 0.5 + 0.5 * Math.sin((frameIndex / totalFrames) * Math.PI * 8);
-  const glitchRate = 0.035 + pulse * 0.055;
+  const glitchRate = 0.018 + pulse * 0.035;
 
   return lines.map((line, lineIndex) =>
     Array.from(line)
@@ -170,6 +162,272 @@ function makeGlitchedLines(
       })
       .join(""),
   );
+}
+
+const PIXEL_GLYPHS: Record<string, readonly string[]> = {
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00010", "11100"],
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+  "#": ["01010", "01010", "11111", "01010", "11111", "01010", "01010"],
+  "$": ["00100", "01111", "10100", "01110", "00101", "11110", "00100"],
+  "%": ["11001", "11010", "00100", "01000", "10010", "00110", "10011"],
+  "@": ["01110", "10001", "10111", "10101", "10111", "10000", "01110"],
+};
+
+function svgNumber(value: number) {
+  return Number.isFinite(value) ? value.toFixed(2) : "0";
+}
+
+function renderPixelGlyph(
+  pattern: readonly string[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const columns = pattern[0]?.length ?? 5;
+  const rows = pattern.length;
+  const gap = Math.max(0.45, Math.min(width, height) * 0.045);
+  const pixelWidth = (width - gap * (columns + 1)) / columns;
+  const pixelHeight = (height - gap * (rows + 1)) / rows;
+  const radius = Math.min(pixelWidth, pixelHeight) * 0.18;
+  const parts: string[] = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (pattern[row][column] !== "1") continue;
+
+      parts.push(
+        `<rect x="${svgNumber(x + gap + column * (pixelWidth + gap))}" y="${svgNumber(
+          y + gap + row * (pixelHeight + gap),
+        )}" width="${svgNumber(pixelWidth)}" height="${svgNumber(
+          pixelHeight,
+        )}" rx="${svgNumber(radius)}"/>`,
+      );
+    }
+  }
+
+  return parts.join("");
+}
+
+function renderVectorGlyph(
+  character: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const left = x + width * 0.16;
+  const right = x + width * 0.84;
+  const top = y + height * 0.16;
+  const midX = x + width * 0.5;
+  const midY = y + height * 0.52;
+  const bottom = y + height * 0.86;
+  const strokeWidth = Math.max(1.2, Math.min(width, height) * 0.11);
+  const path = (data: string) =>
+    `<path d="${data}" stroke-width="${svgNumber(strokeWidth)}"/>`;
+  const line = (x1: number, y1: number, x2: number, y2: number) =>
+    path(
+      `M ${svgNumber(x1)} ${svgNumber(y1)} L ${svgNumber(x2)} ${svgNumber(y2)}`,
+    );
+  const circle = (cx: number, cy: number, radius = strokeWidth * 0.62) =>
+    `<circle cx="${svgNumber(cx)}" cy="${svgNumber(cy)}" r="${svgNumber(
+      radius,
+    )}"/>`;
+
+  switch (character) {
+    case " ":
+      return "";
+    case "_":
+      return line(left, bottom, right, bottom);
+    case "-":
+      return line(left, midY, right, midY);
+    case "=":
+      return (
+        line(left, y + height * 0.42, right, y + height * 0.42) +
+        line(left, y + height * 0.66, right, y + height * 0.66)
+      );
+    case "|":
+      return line(midX, top, midX, bottom);
+    case "/":
+      return line(left, bottom, right, top);
+    case "\\":
+      return line(left, top, right, bottom);
+    case "<":
+      return line(right, top, left, midY) + line(left, midY, right, bottom);
+    case ">":
+      return line(left, top, right, midY) + line(right, midY, left, bottom);
+    case "+":
+      return line(left, midY, right, midY) + line(midX, top, midX, bottom);
+    case "*":
+      return (
+        line(left, midY, right, midY) +
+        line(midX, top, midX, bottom) +
+        line(left, top, right, bottom) +
+        line(left, bottom, right, top)
+      );
+    case ".":
+      return circle(midX, bottom);
+    case ",":
+      return circle(midX, bottom - strokeWidth) + line(midX, bottom, left, y + height);
+    case ":":
+      return circle(midX, y + height * 0.34) + circle(midX, y + height * 0.7);
+    case ";":
+      return (
+        circle(midX, y + height * 0.34) +
+        circle(midX, y + height * 0.68) +
+        line(midX, y + height * 0.75, left, y + height * 0.96)
+      );
+    case "'":
+      return line(midX, top, x + width * 0.42, y + height * 0.36);
+    case '"':
+      return (
+        line(x + width * 0.36, top, x + width * 0.3, y + height * 0.36) +
+        line(x + width * 0.68, top, x + width * 0.62, y + height * 0.36)
+      );
+    case "`":
+      return line(x + width * 0.34, top, x + width * 0.55, y + height * 0.34);
+    case "^":
+      return line(left, midY, midX, top) + line(midX, top, right, midY);
+    case "~":
+      return path(
+        `M ${svgNumber(left)} ${svgNumber(midY)} C ${svgNumber(
+          x + width * 0.34,
+        )} ${svgNumber(top)} ${svgNumber(x + width * 0.5)} ${svgNumber(
+          bottom,
+        )} ${svgNumber(right)} ${svgNumber(midY)}`,
+      );
+    case "(":
+      return path(
+        `M ${svgNumber(right)} ${svgNumber(top)} C ${svgNumber(
+          left,
+        )} ${svgNumber(top)} ${svgNumber(left)} ${svgNumber(bottom)} ${svgNumber(
+          right,
+        )} ${svgNumber(bottom)}`,
+      );
+    case ")":
+      return path(
+        `M ${svgNumber(left)} ${svgNumber(top)} C ${svgNumber(
+          right,
+        )} ${svgNumber(top)} ${svgNumber(right)} ${svgNumber(
+          bottom,
+        )} ${svgNumber(left)} ${svgNumber(bottom)}`,
+      );
+    case "[":
+      return line(right, top, left, top) + line(left, top, left, bottom) + line(left, bottom, right, bottom);
+    case "]":
+      return line(left, top, right, top) + line(right, top, right, bottom) + line(right, bottom, left, bottom);
+    case "{":
+      return (
+        path(
+          `M ${svgNumber(right)} ${svgNumber(top)} C ${svgNumber(
+            left,
+          )} ${svgNumber(top)} ${svgNumber(midX)} ${svgNumber(
+            midY,
+          )} ${svgNumber(left)} ${svgNumber(midY)}`,
+        ) +
+        path(
+          `M ${svgNumber(left)} ${svgNumber(midY)} C ${svgNumber(
+            midX,
+          )} ${svgNumber(midY)} ${svgNumber(left)} ${svgNumber(
+            bottom,
+          )} ${svgNumber(right)} ${svgNumber(bottom)}`,
+        )
+      );
+    case "}":
+      return (
+        path(
+          `M ${svgNumber(left)} ${svgNumber(top)} C ${svgNumber(
+            right,
+          )} ${svgNumber(top)} ${svgNumber(midX)} ${svgNumber(
+            midY,
+          )} ${svgNumber(right)} ${svgNumber(midY)}`,
+        ) +
+        path(
+          `M ${svgNumber(right)} ${svgNumber(midY)} C ${svgNumber(
+            midX,
+          )} ${svgNumber(midY)} ${svgNumber(right)} ${svgNumber(
+            bottom,
+          )} ${svgNumber(left)} ${svgNumber(bottom)}`,
+        )
+      );
+    case "!":
+      return line(midX, top, midX, y + height * 0.66) + circle(midX, bottom);
+    default: {
+      const pattern = PIXEL_GLYPHS[character.toUpperCase()];
+      if (pattern) {
+        return renderPixelGlyph(pattern, x + width * 0.08, y + height * 0.05, width * 0.84, height * 0.9);
+      }
+
+      return line(left, top, right, bottom) + line(right, top, left, bottom);
+    }
+  }
+}
+
+function renderAsciiShapes(
+  lines: string[],
+  x: number,
+  y: number,
+  fontSize: number,
+  lineHeight: number,
+) {
+  const charWidth = fontSize * 0.58;
+  const parts: string[] = [];
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const top = y + lineIndex * lineHeight;
+
+    for (let charIndex = 0; charIndex < line.length; charIndex += 1) {
+      const character = line[charIndex];
+      if (character === " ") continue;
+
+      parts.push(
+        renderVectorGlyph(
+          character,
+          x + charIndex * charWidth,
+          top,
+          charWidth,
+          fontSize,
+        ),
+      );
+    }
+  }
+
+  return parts.join("\n");
 }
 
 function renderFrameSvg({
@@ -198,15 +456,8 @@ function renderFrameSvg({
   const progress = frameIndex / Math.max(1, totalFrames - 1);
   const flicker = 0.88 + 0.12 * Math.sin(progress * Math.PI * 22);
   const opacity = Math.max(0.76, Math.min(1, flicker));
-  const tspans = lines
-    .map((line, index) => {
-      const dy = index === 0 ? 0 : lineHeight;
-
-      return `<tspan x="${x.toFixed(2)}" dy="${dy.toFixed(2)}">${escapeXml(
-        line,
-      )}</tspan>`;
-    })
-    .join("");
+  const shapes = renderAsciiShapes(lines, x, y, fontSize, lineHeight);
+  const jitterX = Math.sin(progress * Math.PI * 44) * 1.4;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
@@ -224,26 +475,16 @@ function renderFrameSvg({
     </pattern>
   </defs>
   <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.35"/>
-  <text
-    x="${x.toFixed(2)}"
-    y="${y.toFixed(2)}"
-    fill="${color.hex}"
-    filter="url(#glow)"
-    font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace"
-    font-size="${fontSize.toFixed(2)}"
-    opacity="${opacity.toFixed(3)}"
-    xml:space="preserve"
-  >${tspans}</text>
-  <text
-    x="${x.toFixed(2)}"
-    y="${y.toFixed(2)}"
-    fill="${color.hex}"
-    font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace"
-    font-size="${fontSize.toFixed(2)}"
-    opacity="0.36"
-    transform="translate(${(Math.sin(progress * 22) * 2).toFixed(2)} 0)"
-    xml:space="preserve"
-  >${tspans}</text>
+  <g fill="${color.hex}" stroke="${color.hex}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity.toFixed(
+    3,
+  )}" filter="url(#glow)">
+    ${shapes}
+  </g>
+  <g fill="${color.hex}" stroke="${color.hex}" stroke-linecap="round" stroke-linejoin="round" opacity="0.28" transform="translate(${svgNumber(
+    jitterX,
+  )} 0)">
+    ${shapes}
+  </g>
 </svg>`;
 }
 
