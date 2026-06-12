@@ -19,6 +19,7 @@ import {
   openBotStartUrl,
   type TelegramSendResponse,
 } from "@/lib/telegram/client-export";
+import { encodeInlineTextQuery } from "@/lib/telegram/inline-text";
 
 type TextRenderResponse =
   | {
@@ -80,6 +81,9 @@ export function TextGenerator() {
   const [sendStatus, setSendStatus] = useState("send pending");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendHelpUrl, setSendHelpUrl] = useState("");
+  const [textPostStatus, setTextPostStatus] = useState("publish text");
+  const [copyTextStatus, setCopyTextStatus] = useState("copy tg code");
+  const [textPostError, setTextPostError] = useState("");
   const [videoProgress, setVideoProgress] = useState(0);
   const [previewWidth, setPreviewWidth] = useState(0);
   const previewRef = useRef<HTMLDivElement | null>(null);
@@ -171,7 +175,51 @@ export function TextGenerator() {
     setSendStatus("send pending");
     setSendError(null);
     setSendHelpUrl("");
+    setTextPostStatus("publish text");
+    setCopyTextStatus("copy tg code");
+    setTextPostError("");
     setVideoProgress(0);
+  };
+
+  const copyTelegramCodeBlock = async () => {
+    if (!renderResult?.ok) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        "```\n" + renderResult.fit.fittedLines.join("\n") + "\n```",
+      );
+      setCopyTextStatus("copied");
+      setTextPostError("");
+    } catch {
+      setCopyTextStatus("copy failed");
+    }
+
+    window.setTimeout(() => setCopyTextStatus("copy tg code"), 1400);
+  };
+
+  const publishTextInline = () => {
+    if (!renderResult?.ok) return;
+
+    const switchInlineQuery = window.Telegram?.WebApp?.switchInlineQuery;
+
+    if (!switchInlineQuery) {
+      setTextPostStatus("open in tg");
+      setTextPostError("Open ASCIILOGRAPH inside Telegram and try PUBLISH TEXT again.");
+      return;
+    }
+
+    setTextPostStatus("opening inline");
+    setTextPostError("");
+    switchInlineQuery(
+      encodeInlineTextQuery({
+        canvasPreset,
+        font,
+        text: renderResult.text,
+      }),
+      ["users", "groups", "channels"],
+    );
+
+    window.setTimeout(() => setTextPostStatus("publish text"), 1600);
   };
 
   const generateTextVideo = async () => {
@@ -572,6 +620,31 @@ export function TextGenerator() {
           ) : null}
         </div>
       ) : null}
+
+      {textPostError ? (
+        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+          {textPostError}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+          disabled={!renderResult?.ok}
+          onClick={copyTelegramCodeBlock}
+          type="button"
+        >
+          {copyTextStatus}
+        </button>
+        <button
+          className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+          disabled={!renderResult?.ok}
+          onClick={publishTextInline}
+          type="button"
+        >
+          {textPostStatus}
+        </button>
+      </div>
 
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
         <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase tracking-[0.14em] text-ascii-green/70">

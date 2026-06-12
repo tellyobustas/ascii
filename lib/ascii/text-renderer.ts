@@ -116,3 +116,44 @@ export async function renderFigletText(
     fit: bestFit,
   };
 }
+
+export async function renderTelegramInlineAsciiText(
+  text: string,
+  font: AsciiFontName,
+) {
+  registerFigletFonts();
+
+  const widths = [42, 38, 34, 30];
+  let bestAscii = "";
+
+  for (const width of widths) {
+    const asciiText = await figlet.text(text, {
+      font,
+      horizontalLayout: "default",
+      verticalLayout: "default",
+      whitespaceBreak: true,
+      width,
+    });
+    const maxLineLength = Math.max(
+      ...asciiText.split("\n").map((line) => line.length),
+    );
+
+    bestAscii = asciiText;
+
+    if (maxLineLength <= 56 && asciiText.length <= 3900) {
+      break;
+    }
+  }
+
+  const normalized = bestAscii
+    .split("\n")
+    .map((line) => line.replace(/\s+$/g, ""))
+    .join("\n")
+    .trim();
+
+  if (normalized.length <= 3900) {
+    return normalized;
+  }
+
+  return normalized.slice(0, 3896) + "\n...";
+}
