@@ -127,6 +127,8 @@ export function ImageGenerator() {
             key={id}
             onClick={() => {
               setPresetId(id);
+              setResult(null);
+              setError("");
               setStatus(file ? "style changed" : "idle");
             }}
           >

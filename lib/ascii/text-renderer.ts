@@ -55,10 +55,10 @@ export function registerFigletFonts() {
 }
 
 export function cleanText(value: unknown) {
-  if (typeof value !== "string") return "Type Something";
+  if (typeof value !== "string") return "Send Nudes";
 
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.slice(0, MAX_TEXT_LENGTH) || "Type Something";
+  return normalized.slice(0, MAX_TEXT_LENGTH) || "Send Nudes";
 }
 
 export async function renderFigletText(

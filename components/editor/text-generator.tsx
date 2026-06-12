@@ -72,7 +72,7 @@ function getTelegramInitData() {
 }
 
 export function TextGenerator() {
-  const [text, setText] = useState("Type Something");
+  const [text, setText] = useState("Send Nudes");
   const [font, setFont] = useState<AsciiFontName>("Graffiti");
   const [fontQuery, setFontQuery] = useState("");
   const [canvasPreset, setCanvasPreset] =

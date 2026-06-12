@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import {
   BRAILLE_DOT_MAP,
+  BRAILLE_UNICODE_OFFSET,
   IMAGE_ASCII_PRESETS,
   IMAGE_CHARACTER_SETS,
   IMAGE_LIMITS,
@@ -50,14 +51,6 @@ function adjustLuma(luma: number, options: { brightness: number; contrast: numbe
   return clampByte(brightened);
 }
 
-function escapeXml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function colorToCss(color?: Rgb) {
   if (!color) return "#00ff66";
 
@@ -82,6 +75,210 @@ function sampleRgb(raw: Buffer, index: number): Rgb {
     g: raw[offset + 1] ?? 0,
     b: raw[offset + 2] ?? 0,
   };
+}
+
+function svgNumber(value: number) {
+  return Number.isFinite(value) ? value.toFixed(2) : "0";
+}
+
+function effectiveThreshold(
+  preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId],
+) {
+  return clampByte(preset.threshold + (1 - preset.density) * 72);
+}
+
+const PIXEL_GLYPHS: Record<string, readonly string[]> = {
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00010", "11100"],
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+  "#": ["01010", "01010", "11111", "01010", "11111", "01010", "01010"],
+  "$": ["00100", "01111", "10100", "01110", "00101", "11110", "00100"],
+  "%": ["11001", "11010", "00100", "01000", "10010", "00110", "10011"],
+  "@": ["01110", "10001", "10111", "10101", "10111", "10000", "01110"],
+};
+
+function renderPixelGlyph(
+  pattern: readonly string[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const columns = pattern[0]?.length ?? 5;
+  const rows = pattern.length;
+  const gap = Math.max(0.35, Math.min(width, height) * 0.04);
+  const pixelWidth = Math.max(0.4, (width - gap * (columns + 1)) / columns);
+  const pixelHeight = Math.max(0.4, (height - gap * (rows + 1)) / rows);
+  const radius = Math.min(pixelWidth, pixelHeight) * 0.18;
+  const parts: string[] = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (pattern[row][column] !== "1") continue;
+
+      parts.push(
+        `<rect x="${svgNumber(x + gap + column * (pixelWidth + gap))}" y="${svgNumber(
+          y + gap + row * (pixelHeight + gap),
+        )}" width="${svgNumber(pixelWidth)}" height="${svgNumber(
+          pixelHeight,
+        )}" rx="${svgNumber(radius)}"/>`,
+      );
+    }
+  }
+
+  return parts.join("");
+}
+
+function renderBlockGlyph(character: string, x: number, y: number, size: number) {
+  const opacityByChar: Record<string, number> = {
+    "░": 0.24,
+    "▒": 0.48,
+    "▓": 0.74,
+    "█": 1,
+  };
+  const opacity = opacityByChar[character];
+
+  if (!opacity) return "";
+
+  return `<rect x="${svgNumber(x + size * 0.08)}" y="${svgNumber(
+    y + size * 0.08,
+  )}" width="${svgNumber(size * 0.84)}" height="${svgNumber(
+    size * 0.84,
+  )}" opacity="${svgNumber(opacity)}"/>`;
+}
+
+function renderVectorGlyph(
+  character: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const blockGlyph = renderBlockGlyph(character, x, y, Math.min(width, height));
+  if (blockGlyph) return blockGlyph;
+
+  const left = x + width * 0.16;
+  const right = x + width * 0.84;
+  const top = y + height * 0.16;
+  const midX = x + width * 0.5;
+  const midY = y + height * 0.52;
+  const bottom = y + height * 0.86;
+  const strokeWidth = Math.max(0.9, Math.min(width, height) * 0.11);
+  const path = (data: string) =>
+    `<path d="${data}" stroke-width="${svgNumber(strokeWidth)}"/>`;
+  const line = (x1: number, y1: number, x2: number, y2: number) =>
+    path(
+      `M ${svgNumber(x1)} ${svgNumber(y1)} L ${svgNumber(x2)} ${svgNumber(y2)}`,
+    );
+  const circle = (cx: number, cy: number, radius = strokeWidth * 0.66) =>
+    `<circle cx="${svgNumber(cx)}" cy="${svgNumber(cy)}" r="${svgNumber(
+      radius,
+    )}"/>`;
+
+  switch (character) {
+    case " ":
+      return "";
+    case ".":
+      return circle(midX, bottom);
+    case ",":
+      return circle(midX, bottom - strokeWidth) + line(midX, bottom, left, y + height);
+    case ":":
+      return circle(midX, y + height * 0.34) + circle(midX, y + height * 0.7);
+    case ";":
+      return (
+        circle(midX, y + height * 0.34) +
+        circle(midX, y + height * 0.68) +
+        line(midX, y + height * 0.75, left, y + height * 0.96)
+      );
+    case "-":
+    case "_":
+      return line(left, character === "-" ? midY : bottom, right, character === "-" ? midY : bottom);
+    case "=":
+      return (
+        line(left, y + height * 0.42, right, y + height * 0.42) +
+        line(left, y + height * 0.66, right, y + height * 0.66)
+      );
+    case "|":
+    case "I":
+    case "l":
+      return line(midX, top, midX, bottom);
+    case "/":
+      return line(left, bottom, right, top);
+    case "\\":
+      return line(left, top, right, bottom);
+    case "<":
+      return line(right, top, left, midY) + line(left, midY, right, bottom);
+    case ">":
+      return line(left, top, right, midY) + line(right, midY, left, bottom);
+    case "+":
+      return line(left, midY, right, midY) + line(midX, top, midX, bottom);
+    case "*":
+      return (
+        line(left, midY, right, midY) +
+        line(midX, top, midX, bottom) +
+        line(left, top, right, bottom) +
+        line(left, bottom, right, top)
+      );
+    case "o":
+    case "O":
+      return `<ellipse cx="${svgNumber(midX)}" cy="${svgNumber(
+        midY,
+      )}" rx="${svgNumber(width * 0.32)}" ry="${svgNumber(
+        height * 0.34,
+      )}" stroke-width="${svgNumber(strokeWidth)}" fill="none"/>`;
+    case "x":
+    case "X":
+      return line(left, top, right, bottom) + line(right, top, left, bottom);
+    case "!":
+      return line(midX, top, midX, y + height * 0.66) + circle(midX, bottom);
+    default: {
+      const pattern = PIXEL_GLYPHS[character.toUpperCase()];
+      if (pattern) {
+        return renderPixelGlyph(
+          pattern,
+          x + width * 0.08,
+          y + height * 0.05,
+          width * 0.84,
+          height * 0.9,
+        );
+      }
+
+      return line(left, top, right, bottom) + line(right, top, left, bottom);
+    }
+  }
 }
 
 async function readResizedPixels(
@@ -149,6 +346,7 @@ function renderBrailleText(
 ) {
   const rows: string[] = [];
   const colors: Array<Array<Rgb | undefined>> = [];
+  const threshold = effectiveThreshold(preset);
 
   for (let y = 0; y < raw.height; y += 4) {
     let line = "";
@@ -168,8 +366,8 @@ function renderBrailleText(
           const index = py * raw.width + px;
           const adjusted = adjustLuma(raw.grayscale[index] ?? 0, preset);
           const lit = invert
-            ? adjusted < preset.threshold
-            : adjusted > preset.threshold;
+            ? adjusted < threshold
+            : adjusted > threshold;
 
           if (!lit) continue;
 
@@ -227,6 +425,7 @@ function ditherToChars(
   if (preset.mode === "floyd-steinberg-dither") {
     const errors = lumas.slice();
     const lines: string[] = [];
+    const levels = Math.max(1, chars.length - 1);
 
     for (let y = 0; y < height; y += 1) {
       let line = "";
@@ -234,7 +433,11 @@ function ditherToChars(
       for (let x = 0; x < width; x += 1) {
         const index = y * width + x;
         const oldValue = adjustLuma(errors[index] ?? 0, preset);
-        const newValue = oldValue > preset.threshold ? 255 : 0;
+        const quantizedIndex = Math.max(
+          0,
+          Math.min(levels, Math.round((oldValue / 255) * levels)),
+        );
+        const newValue = (quantizedIndex / levels) * 255;
         const error = oldValue - newValue;
         const luma = invert ? 255 - newValue : newValue;
         line += mapLumaToCharacter(luma, chars);
@@ -265,7 +468,7 @@ function ditherToChars(
         ((BAYER_4X4[y % 4][x % 4] + 0.5) / 16) * 255;
       const luma =
         preset.mode === "bayer-dither"
-          ? adjusted + (adjusted - bayerThreshold) * 0.28
+          ? clampByte(adjusted + (bayerThreshold - 127.5) * 0.42)
           : adjusted;
 
       line += mapLumaToCharacter(luma, chars, invert);
@@ -277,60 +480,142 @@ function ditherToChars(
   return lines;
 }
 
-function renderAsciiSvg(options: {
+function renderBrailleSvg(options: {
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
   preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
 }) {
   const maxColumns = Math.max(...options.lines.map((line) => line.length), 1);
-  const fontSize = Math.max(6, Math.min(14, Math.floor(980 / maxColumns)));
-  const charWidth = fontSize * 0.62;
-  const lineHeight = fontSize * 1.18;
-  const padding = Math.round(fontSize * 2.5);
-  const width = Math.ceil(maxColumns * charWidth + padding * 2);
-  const height = Math.ceil(options.lines.length * lineHeight + padding * 2);
-  const textParts: string[] = [];
-
-  for (let y = 0; y < options.lines.length; y += 1) {
-    const line = options.lines[y] || " ";
-    const baseline = padding + y * lineHeight + fontSize;
-
-    if (options.colors) {
-      const tspans = Array.from(line, (char, x) => {
-        const color = options.colors?.[y]?.[x];
-
-        return `<tspan fill="${colorToCss(color)}">${escapeXml(char)}</tspan>`;
-      }).join("");
-
-      textParts.push(
-        `<text x="${padding}" y="${baseline}" class="ascii">${tspans}</text>`,
-      );
-    } else {
-      textParts.push(
-        `<text x="${padding}" y="${baseline}" class="ascii">${escapeXml(line)}</text>`,
-      );
-    }
-  }
-
+  const cellWidth = Math.max(5.8, Math.min(9.5, 900 / maxColumns));
+  const cellHeight = cellWidth * 1.85;
+  const padding = Math.round(cellWidth * 3);
+  const width = Math.ceil(maxColumns * cellWidth + padding * 2);
+  const height = Math.ceil(options.lines.length * cellHeight + padding * 2);
+  const dotRadius = cellWidth * 0.15;
+  const shapes: string[] = [];
   const foreground =
     String(options.preset.mode) === "white-terminal" ? "#f2f2f2" : "#00ff66";
+  const dotPositions = [
+    [0.3, 0.16, 0x01],
+    [0.3, 0.39, 0x02],
+    [0.3, 0.62, 0x04],
+    [0.3, 0.85, 0x40],
+    [0.7, 0.16, 0x08],
+    [0.7, 0.39, 0x10],
+    [0.7, 0.62, 0x20],
+    [0.7, 0.85, 0x80],
+  ] as const;
+
+  for (let row = 0; row < options.lines.length; row += 1) {
+    const line = options.lines[row] || " ";
+
+    for (let column = 0; column < line.length; column += 1) {
+      const bits = line.charCodeAt(column) - BRAILLE_UNICODE_OFFSET;
+      if (bits <= 0) continue;
+
+      const cellX = padding + column * cellWidth;
+      const cellY = padding + row * cellHeight;
+      const color = colorToCss(options.colors?.[row]?.[column]);
+
+      for (const [dotX, dotY, bit] of dotPositions) {
+        if ((bits & bit) === 0) continue;
+
+        shapes.push(
+          `<circle cx="${svgNumber(cellX + dotX * cellWidth)}" cy="${svgNumber(
+            cellY + dotY * cellHeight,
+          )}" r="${svgNumber(dotRadius)}" fill="${color}"/>`,
+        );
+      }
+    }
+  }
 
   return {
     height,
     svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#000000"/>
-  <style>
-    .ascii {
-      fill: ${foreground};
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: ${fontSize}px;
-      font-weight: 700;
-      white-space: pre;
-    }
-  </style>
+  <defs>
+    <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="1.4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="scanlines" width="1" height="7" patternUnits="userSpaceOnUse">
+      <rect y="0" width="1" height="1" fill="rgba(255,255,255,0.04)"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.55"/>
   <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="rgba(0,255,102,0.25)" stroke-width="1"/>
-  ${textParts.join("\n  ")}
+  <g filter="url(#softGlow)" fill="${foreground}">${shapes.join("\n    ")}</g>
+</svg>`,
+    width,
+  };
+}
+
+function renderAsciiSvg(options: {
+  colors?: Array<Array<Rgb | undefined>>;
+  lines: string[];
+  preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
+}) {
+  if (options.preset.mode === "blocks-braille") {
+    return renderBrailleSvg(options);
+  }
+
+  const maxColumns = Math.max(...options.lines.map((line) => line.length), 1);
+  const fontSize = Math.max(7, Math.min(15, Math.floor(940 / maxColumns)));
+  const charWidth = fontSize * 0.62;
+  const lineHeight = fontSize * 1.12;
+  const padding = Math.round(fontSize * 2.2);
+  const width = Math.ceil(maxColumns * charWidth + padding * 2);
+  const height = Math.ceil(options.lines.length * lineHeight + padding * 2);
+  const foreground =
+    String(options.preset.mode) === "white-terminal" ? "#f2f2f2" : "#00ff66";
+  const shapes: string[] = [];
+
+  for (let row = 0; row < options.lines.length; row += 1) {
+    const line = options.lines[row] || " ";
+    const top = padding + row * lineHeight;
+
+    for (let column = 0; column < line.length; column += 1) {
+      const character = line[column];
+      if (character === " ") continue;
+
+      shapes.push(
+        renderVectorGlyph(
+          character,
+          padding + column * charWidth,
+          top,
+          charWidth,
+          fontSize,
+        ),
+      );
+    }
+  }
+
+  return {
+    height,
+    svg: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="#000000"/>
+  <defs>
+    <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="scanlines" width="1" height="7" patternUnits="userSpaceOnUse">
+      <rect y="0" width="1" height="1" fill="rgba(255,255,255,0.04)"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.55"/>
+  <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="rgba(0,255,102,0.25)" stroke-width="1"/>
+  <g filter="url(#softGlow)" fill="${foreground}" stroke="${foreground}" stroke-linecap="round" stroke-linejoin="round">
+    ${shapes.join("\n    ")}
+  </g>
 </svg>`,
     width,
   };
@@ -376,9 +661,7 @@ export async function renderImageToAsciiPng(
       Math.round(characterWidth * aspectRatio * 0.5),
     );
     const pixels = await readResizedPixels(input, characterWidth, characterHeight);
-    const lumas = Array.from(pixels.grayscale, (luma) =>
-      adjustLuma(luma, preset),
-    );
+    const lumas = Array.from(pixels.grayscale);
     lines = ditherToChars(lumas, pixels.width, pixels.height, preset, invert);
   }
 
