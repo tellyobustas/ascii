@@ -12,30 +12,50 @@ const GLITCH_GLYPHS = "#$%*+/\\<>[]{}01";
 type TabName = (typeof tabs)[number];
 
 function GlitchBrand() {
-  const [label, setLabel] = useState(BRAND);
+  const [chars, setChars] = useState(() => BRAND.split(""));
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
 
-    const glitch = () => {
-      const chars = BRAND.split("");
-      const swaps = 1 + Math.floor(Math.random() * 3);
+    const timers = new Set<number>();
+    const scheduleLetter = (letterIndex: number, delay: number) => {
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        setChars((currentChars) =>
+          currentChars.map((char, index) =>
+            index === letterIndex
+              ? GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)]
+              : char,
+          ),
+        );
 
-      for (let index = 0; index < swaps; index += 1) {
-        const position = Math.floor(Math.random() * chars.length);
-        chars[position] =
-          GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)];
-      }
+        const resetTimer = window.setTimeout(() => {
+          timers.delete(resetTimer);
+          setChars((currentChars) =>
+            currentChars.map((char, index) =>
+              index === letterIndex ? BRAND[index] : char,
+            ),
+          );
+          scheduleLetter(letterIndex, 520 + Math.random() * 1900);
+        }, 70 + Math.random() * 180);
 
-      setLabel(chars.join(""));
-      window.setTimeout(() => setLabel(BRAND), 90 + Math.random() * 120);
+        timers.add(resetTimer);
+      }, delay);
+
+      timers.add(timer);
     };
 
-    const interval = window.setInterval(glitch, 520 + Math.random() * 520);
+    BRAND.split("").forEach((_, index) => {
+      scheduleLetter(index, 160 + Math.random() * 1800 + index * 27);
+    });
 
-    return () => window.clearInterval(interval);
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
   }, []);
 
   return (
@@ -43,7 +63,14 @@ function GlitchBrand() {
       aria-label={BRAND}
       className="ascii-logo ascii-logo-glitch text-[2.45rem] font-black leading-none text-ascii-green sm:text-5xl"
     >
-      {label}
+      {chars.map((char, index) => (
+        <span
+          className="inline-block min-w-[0.62em]"
+          key={BRAND[index] + String(index)}
+        >
+          {char}
+        </span>
+      ))}
     </h1>
   );
 }

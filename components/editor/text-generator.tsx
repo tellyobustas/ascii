@@ -58,6 +58,17 @@ type TextVideoResponse =
       message: string;
     };
 
+type PreparedTextPostResponse =
+  | {
+      expiresAt: number;
+      id: string;
+      ok: true;
+    }
+  | {
+      message: string;
+      ok: false;
+    };
+
 const canvasPresetEntries = Object.entries(TEXT_CANVAS_PRESETS) as Array<
   [TextCanvasPresetId, (typeof TEXT_CANVAS_PRESETS)[TextCanvasPresetId]]
 >;
@@ -197,29 +208,86 @@ export function TextGenerator() {
     window.setTimeout(() => setCopyTextStatus("copy tg code"), 1400);
   };
 
-  const publishTextInline = () => {
-    if (!renderResult?.ok) return;
-
+  const openInlineFallback = () => {
     const switchInlineQuery = window.Telegram?.WebApp?.switchInlineQuery;
 
     if (!switchInlineQuery) {
+      throw new Error("Inline publish is not supported in this Telegram client.");
+    }
+
+    switchInlineQuery(
+      encodeInlineTextQuery({
+        canvasPreset,
+        font,
+        text: renderResult?.ok ? renderResult.text : text,
+      }),
+      ["users", "groups", "channels"],
+    );
+  };
+
+  const publishTextInline = async () => {
+    if (!renderResult?.ok) return;
+
+    const webApp = window.Telegram?.WebApp;
+    const initData = getTelegramInitData();
+
+    if (!webApp) {
       setTextPostStatus("open in tg");
       setTextPostError("Open ASCIILOGRAPH inside Telegram and try PUBLISH TEXT again.");
       return;
     }
 
-    setTextPostStatus("opening inline");
-    setTextPostError("");
-    switchInlineQuery(
-      encodeInlineTextQuery({
-        canvasPreset,
-        font,
-        text: renderResult.text,
-      }),
-      ["users", "groups", "channels"],
-    );
+    try {
+      setTextPostStatus("preparing");
+      setTextPostError("");
 
-    window.setTimeout(() => setTextPostStatus("publish text"), 1600);
+      if (webApp.shareMessage && initData) {
+        const response = await fetch("/api/telegram/prepare-text-post", {
+          body: JSON.stringify({
+            font,
+            initData,
+            text: renderResult.text,
+          }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+        });
+        const payload = (await response.json()) as PreparedTextPostResponse;
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.ok ? "Could not prepare text post." : payload.message);
+        }
+
+        setTextPostStatus("share dialog");
+        webApp.shareMessage(payload.id, (isSent) => {
+          setTextPostStatus(isSent ? "done" : "publish text");
+        });
+        window.setTimeout(() => {
+          setTextPostStatus((currentStatus) =>
+            currentStatus === "share dialog" ? "publish text" : currentStatus,
+          );
+        }, 5000);
+        return;
+      }
+
+      setTextPostStatus("opening inline");
+      openInlineFallback();
+      window.setTimeout(() => setTextPostStatus("publish text"), 1800);
+    } catch (error) {
+      try {
+        setTextPostStatus("opening inline");
+        openInlineFallback();
+        window.setTimeout(() => setTextPostStatus("publish text"), 1800);
+      } catch {
+        setTextPostStatus("publish text");
+        setTextPostError(
+          error instanceof Error
+            ? error.message
+            : "Could not open Telegram publishing.",
+        );
+      }
+    }
   };
 
   const generateTextVideo = async () => {
