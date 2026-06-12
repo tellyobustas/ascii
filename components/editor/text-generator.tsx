@@ -50,6 +50,16 @@ type TextVideoResponse =
       message: string;
     };
 
+type TelegramSendResponse =
+  | {
+      ok: true;
+      message: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 const canvasPresetEntries = Object.entries(TEXT_CANVAS_PRESETS) as Array<
   [TextCanvasPresetId, (typeof TEXT_CANVAS_PRESETS)[TextCanvasPresetId]]
 >;
@@ -57,15 +67,8 @@ const textVideoColorEntries = Object.entries(TEXT_VIDEO_COLORS) as Array<
   [TextVideoColorId, (typeof TEXT_VIDEO_COLORS)[TextVideoColorId]]
 >;
 
-function base64ToBlob(base64: string, mimeType: string) {
-  const byteCharacters = window.atob(base64);
-  const bytes = new Uint8Array(byteCharacters.length);
-
-  for (let index = 0; index < byteCharacters.length; index += 1) {
-    bytes[index] = byteCharacters.charCodeAt(index);
-  }
-
-  return new Blob([bytes.buffer as ArrayBuffer], { type: mimeType });
+function getTelegramInitData() {
+  return window.Telegram?.WebApp?.initData ?? "";
 }
 
 export function TextGenerator() {
@@ -81,6 +84,9 @@ export function TextGenerator() {
   const [videoResult, setVideoResult] = useState<TextVideoResponse | null>(null);
   const [status, setStatus] = useState("rendering");
   const [videoStatus, setVideoStatus] = useState("ready for mp4");
+  const [sendStatus, setSendStatus] = useState("send pending");
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [previewWidth, setPreviewWidth] = useState(0);
   const previewRef = useRef<HTMLDivElement | null>(null);
 
@@ -168,14 +174,33 @@ export function TextGenerator() {
   const resetTextVideo = () => {
     setVideoResult(null);
     setVideoStatus("ready for mp4");
+    setSendStatus("send pending");
+    setSendError(null);
+    setVideoProgress(0);
   };
 
   const generateTextVideo = async () => {
     if (!renderResult?.ok) return;
 
+    let progressTimer: number | undefined;
+
     try {
       setVideoStatus("rendering mp4");
       setVideoResult(null);
+      setSendStatus("send pending");
+      setSendError(null);
+      setVideoProgress(4);
+
+      progressTimer = window.setInterval(() => {
+        setVideoProgress((currentProgress) => {
+          if (currentProgress >= 94) return currentProgress;
+
+          const nextProgress =
+            currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.08));
+
+          return Math.min(94, nextProgress);
+        });
+      }, 260);
 
       const response = await fetch("/api/text/video", {
         body: JSON.stringify({
@@ -194,11 +219,13 @@ export function TextGenerator() {
       if (!response.ok || !payload.ok) {
         setVideoResult(payload);
         setVideoStatus("video error");
+        setVideoProgress(0);
         return;
       }
 
       setVideoResult(payload);
       setVideoStatus("mp4 ready");
+      setVideoProgress(100);
     } catch (error) {
       setVideoResult({
         ok: false,
@@ -206,24 +233,58 @@ export function TextGenerator() {
           error instanceof Error ? error.message : "Could not render MP4.",
       });
       setVideoStatus("video error");
+      setVideoProgress(0);
+    } finally {
+      if (progressTimer) {
+        window.clearInterval(progressTimer);
+      }
     }
   };
 
-  const downloadTextVideo = () => {
+  const sendTextVideoToTelegram = async () => {
     if (!videoResult?.ok) return;
 
-    const blob = base64ToBlob(
-      videoResult.video.base64,
-      videoResult.video.mimeType,
-    );
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = videoResult.video.fileName;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      setSendStatus("open in telegram");
+      setSendError("Open ASCII from Telegram and press SAVE MP4 again.");
+      return;
+    }
+
+    try {
+      setSendStatus("sending");
+      setSendError(null);
+
+      const response = await fetch("/api/telegram/send-result", {
+        body: JSON.stringify({
+          caption: "ASCII text animation",
+          fileName: videoResult.video.fileName,
+          initData,
+          mimeType: videoResult.video.mimeType,
+          resultType: "textVideo",
+          videoBase64: videoResult.video.base64,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json()) as TelegramSendResponse;
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message);
+      }
+
+      setSendStatus("sent to telegram");
+    } catch (error) {
+      setSendStatus("send error");
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : "Could not send MP4 to Telegram.",
+      );
+    }
   };
 
   const activeCanvas =
@@ -242,6 +303,7 @@ export function TextGenerator() {
   const scale = previewWidth > 0 ? previewWidth / activeCanvas.width : 0;
   const activeVideoColor = TEXT_VIDEO_COLORS[videoColor];
   const isVideoRendering = videoStatus === "rendering mp4";
+  const isSending = sendStatus === "sending";
 
   return (
     <div className="mt-4 space-y-3">
@@ -473,25 +535,41 @@ export function TextGenerator() {
         </div>
       ) : null}
 
+      {sendError ? (
+        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+          {sendError}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
         <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase tracking-[0.14em] text-ascii-green/70">
-          {isVideoRendering ? videoStatus : status + " / " + videoStatus}
+          {isVideoRendering
+            ? videoStatus + " " + videoProgress + "%"
+            : status + " / " + videoStatus + " / " + sendStatus}
         </div>
         <button
-          className="min-h-10 border border-ascii-green bg-black px-4 text-xs font-black uppercase tracking-[0.12em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+          className="relative min-h-10 overflow-hidden border border-ascii-green bg-black px-4 text-xs font-black uppercase tracking-[0.12em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
           disabled={!renderResult?.ok || isVideoRendering}
           onClick={generateTextVideo}
           type="button"
         >
-          {isVideoRendering ? "rendering" : "make video"}
+          {isVideoRendering ? (
+            <span
+              className="absolute inset-y-0 left-0 bg-ascii-green/20"
+              style={{ width: videoProgress + "%" }}
+            />
+          ) : null}
+          <span className="relative z-10">
+            {isVideoRendering ? videoProgress + "%" : "make video"}
+          </span>
         </button>
         <button
           className="min-h-10 border border-ascii-green bg-black px-4 text-xs font-black uppercase tracking-[0.12em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
-          disabled={!videoResult?.ok}
-          onClick={downloadTextVideo}
+          disabled={!videoResult?.ok || isSending}
+          onClick={sendTextVideoToTelegram}
           type="button"
         >
-          save mp4
+          {isSending ? "sending" : "save mp4"}
         </button>
       </div>
     </div>

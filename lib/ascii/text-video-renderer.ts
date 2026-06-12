@@ -137,7 +137,7 @@ function makeGlitchedLines(
   seed: number,
 ) {
   const pulse = 0.5 + 0.5 * Math.sin((frameIndex / totalFrames) * Math.PI * 8);
-  const glitchRate = 0.018 + pulse * 0.035;
+  const glitchRate = 0.028 + pulse * 0.052;
 
   return lines.map((line, lineIndex) =>
     Array.from(line)

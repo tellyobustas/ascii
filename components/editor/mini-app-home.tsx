@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ImageGenerator } from "@/components/editor/image-generator";
 import { StatusPill } from "@/components/editor/status-pill";
 import { TextGenerator } from "@/components/editor/text-generator";
@@ -60,6 +60,11 @@ const tabMeta: Record<
 export function MiniAppHome() {
   const [activeTab, setActiveTab] = useState<TabName>("TEXT");
   const activeMeta = tabMeta[activeTab];
+
+  useEffect(() => {
+    window.Telegram?.WebApp?.ready();
+    window.Telegram?.WebApp?.expand();
+  }, []);
 
   const bootLines = useMemo(
     () => [
