@@ -67,13 +67,13 @@ type Scene = {
 };
 
 const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
-  cloudCount: 4,
-  particlesPerCloud: 132,
-  speed: 0.34,
-  turbulence: 0.88,
+  cloudCount: 7,
+  particlesPerCloud: 96,
+  speed: 0.3,
+  turbulence: 0.96,
   cohesionStrength: 0.0068,
-  flowStrength: 0.066,
-  trailAmount: 0.2,
+  flowStrength: 0.07,
+  trailAmount: 0.18,
   opacity: {
     min: 0.72,
     max: 1,
@@ -95,19 +95,19 @@ const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
 
 const MOBILE_CONFIG: AsciiCloudBackgroundConfig = {
   ...DESKTOP_CONFIG,
-  cloudCount: 3,
-  particlesPerCloud: 82,
-  speed: 0.28,
-  flowStrength: 0.052,
-  trailAmount: 0.22,
+  cloudCount: 5,
+  particlesPerCloud: 54,
+  speed: 0.24,
+  flowStrength: 0.056,
+  trailAmount: 0.2,
   fontSizeMin: 8,
   fontSizeMax: 16,
 };
 
 const REDUCED_MOTION_CONFIG: AsciiCloudBackgroundConfig = {
   ...MOBILE_CONFIG,
-  cloudCount: 2,
-  particlesPerCloud: 52,
+  cloudCount: 3,
+  particlesPerCloud: 34,
   speed: 0.05,
   turbulence: 0.18,
   flowStrength: 0.012,
@@ -179,10 +179,10 @@ function curlNoise(x: number, y: number, time: number, phase: number) {
 }
 
 function createCloud(index: number, width: number, height: number): CloudAnchor {
-  const depth = index === 0 ? 1 : randomBetween(0.48, 0.92);
+  const depth = index === 0 ? 1 : randomBetween(0.42, 0.96);
   const radius = randomBetween(
-    Math.min(width, height) * 0.18,
-    Math.min(width, height) * 0.34,
+    Math.min(width, height) * 0.11,
+    Math.min(width, height) * 0.27,
   );
   const driftAngle =
     index === 0
@@ -190,7 +190,7 @@ function createCloud(index: number, width: number, height: number): CloudAnchor 
       : randomBetween(0, TAU);
 
   return {
-    aspect: randomBetween(1.85, 3.2),
+    aspect: randomBetween(1.65, 3.45),
     depth,
     driftAngle,
     phase: randomBetween(0, TAU),
@@ -204,11 +204,11 @@ function createCloud(index: number, width: number, height: number): CloudAnchor 
     x:
       index === 0
         ? randomBetween(width * 0.08, width * 0.28)
-        : randomBetween(width * 0.08, width * 0.92),
+        : randomBetween(-width * 0.08, width * 1.08),
     y:
       index === 0
         ? randomBetween(height * 0.18, height * 0.42)
-        : randomBetween(height * 0.12, height * 0.88),
+        : randomBetween(height * 0.05, height * 0.95),
   };
 }
 

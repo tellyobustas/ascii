@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ASCII",
+  title: "ASCIILOGRAPH",
   description: "Telegram Mini App for text, image and video ASCII conversion.",
 };
 
