@@ -12,6 +12,13 @@ import {
   type TextVideoColorId,
 } from "@/lib/ascii/text";
 import type { FitAsciiTextResult } from "@/lib/canvas/fit";
+import {
+  getBotStartUrl,
+  getTelegramInitData,
+  getTelegramSendErrorCopy,
+  openBotStartUrl,
+  type TelegramSendResponse,
+} from "@/lib/telegram/client-export";
 
 type TextRenderResponse =
   | {
@@ -50,26 +57,12 @@ type TextVideoResponse =
       message: string;
     };
 
-type TelegramSendResponse =
-  | {
-      ok: true;
-      message: string;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
-
 const canvasPresetEntries = Object.entries(TEXT_CANVAS_PRESETS) as Array<
   [TextCanvasPresetId, (typeof TEXT_CANVAS_PRESETS)[TextCanvasPresetId]]
 >;
 const textVideoColorEntries = Object.entries(TEXT_VIDEO_COLORS) as Array<
   [TextVideoColorId, (typeof TEXT_VIDEO_COLORS)[TextVideoColorId]]
 >;
-
-function getTelegramInitData() {
-  return window.Telegram?.WebApp?.initData ?? "";
-}
 
 export function TextGenerator() {
   const [text, setText] = useState("Send Nudes");
@@ -86,6 +79,7 @@ export function TextGenerator() {
   const [videoStatus, setVideoStatus] = useState("ready for mp4");
   const [sendStatus, setSendStatus] = useState("send pending");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendHelpUrl, setSendHelpUrl] = useState("");
   const [videoProgress, setVideoProgress] = useState(0);
   const [previewWidth, setPreviewWidth] = useState(0);
   const previewRef = useRef<HTMLDivElement | null>(null);
@@ -176,6 +170,7 @@ export function TextGenerator() {
     setVideoStatus("ready for mp4");
     setSendStatus("send pending");
     setSendError(null);
+    setSendHelpUrl("");
     setVideoProgress(0);
   };
 
@@ -189,6 +184,7 @@ export function TextGenerator() {
       setVideoResult(null);
       setSendStatus("send pending");
       setSendError(null);
+      setSendHelpUrl("");
       setVideoProgress(4);
 
       progressTimer = window.setInterval(() => {
@@ -247,7 +243,8 @@ export function TextGenerator() {
     const initData = getTelegramInitData();
 
     if (!initData) {
-      setSendStatus("open in telegram");
+      setSendStatus("start bot");
+      setSendHelpUrl(getBotStartUrl());
       setSendError("Open ASCII from Telegram and press SAVE MP4 again.");
       return;
     }
@@ -255,6 +252,7 @@ export function TextGenerator() {
     try {
       setSendStatus("sending");
       setSendError(null);
+      setSendHelpUrl("");
 
       const response = await fetch("/api/telegram/send-result", {
         body: JSON.stringify({
@@ -272,13 +270,38 @@ export function TextGenerator() {
       });
       const payload = (await response.json()) as TelegramSendResponse;
 
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.message);
+      if (!response.ok || payload.ok === false) {
+        const failedPayload: Extract<TelegramSendResponse, { ok: false }> =
+          payload.ok === false
+            ? payload
+            : {
+                message: "Could not send MP4 to Telegram.",
+                ok: false,
+              };
+
+        setSendStatus(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? "start bot"
+            : "send error",
+        );
+        setSendHelpUrl(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? failedPayload.startUrl || getBotStartUrl()
+            : "",
+        );
+        setSendError(
+          getTelegramSendErrorCopy(
+            failedPayload,
+            "Could not send MP4 to Telegram.",
+          ),
+        );
+        return;
       }
 
-      setSendStatus("sent to telegram");
+      setSendStatus("done");
     } catch (error) {
       setSendStatus("send error");
+      setSendHelpUrl("");
       setSendError(
         error instanceof Error
           ? error.message
@@ -538,6 +561,15 @@ export function TextGenerator() {
       {sendError ? (
         <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {sendError}
+          {sendHelpUrl ? (
+            <button
+              className="mt-2 block min-h-9 w-full border border-red-300/70 bg-black px-3 text-xs font-black uppercase tracking-[0.12em] text-red-200 transition hover:bg-red-300 hover:text-black"
+              onClick={() => openBotStartUrl(sendHelpUrl)}
+              type="button"
+            >
+              start bot
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -569,7 +601,7 @@ export function TextGenerator() {
           onClick={sendTextVideoToTelegram}
           type="button"
         >
-          {isSending ? "sending" : "save mp4"}
+          {isSending ? "sending" : sendStatus === "done" ? "done" : "save mp4"}
         </button>
       </div>
     </div>

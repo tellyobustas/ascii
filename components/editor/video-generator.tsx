@@ -9,6 +9,13 @@ import {
   VIDEO_RENDER_LIMITS,
   type VideoAsciiPresetId,
 } from "@/lib/ascii/video";
+import {
+  getBotStartUrl,
+  getTelegramInitData,
+  getTelegramSendErrorCopy,
+  openBotStartUrl,
+  type TelegramSendResponse,
+} from "@/lib/telegram/client-export";
 
 type VideoRenderResponse =
   | {
@@ -33,13 +40,6 @@ const videoPresetEntries = Object.entries(VIDEO_ASCII_PRESETS) as Array<
   [VideoAsciiPresetId, (typeof VIDEO_ASCII_PRESETS)[VideoAsciiPresetId]]
 >;
 
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const anchor = document.createElement("a");
-  anchor.href = dataUrl;
-  anchor.download = filename;
-  anchor.click();
-}
-
 export function VideoGenerator() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState("");
@@ -53,6 +53,9 @@ export function VideoGenerator() {
   const [result, setResult] = useState<VideoRenderResponse | null>(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [sendStatus, setSendStatus] = useState("send mp4");
+  const [sendError, setSendError] = useState("");
+  const [sendHelpUrl, setSendHelpUrl] = useState("");
 
   useEffect(() => {
     if (!fileUrl) return;
@@ -79,6 +82,9 @@ export function VideoGenerator() {
 
     setStatus("processing");
     setError("");
+    setSendError("");
+    setSendHelpUrl("");
+    setSendStatus("send mp4");
 
     const formData = new FormData();
     formData.set("file", file);
@@ -103,6 +109,7 @@ export function VideoGenerator() {
 
       setResult(payload);
       setStatus("done");
+      setSendStatus("send mp4");
     } catch {
       setResult({
         ok: false,
@@ -110,6 +117,74 @@ export function VideoGenerator() {
       });
       setError("Video render failed.");
       setStatus("error");
+    }
+  };
+
+  const sendVideoToTelegram = async () => {
+    if (!result?.ok) return;
+
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      setSendStatus("start bot");
+      setSendHelpUrl(getBotStartUrl());
+      setSendError("Open ASCII from Telegram and press SEND MP4 again.");
+      return;
+    }
+
+    try {
+      setSendStatus("sending");
+      setSendError("");
+      setSendHelpUrl("");
+
+      const response = await fetch("/api/telegram/send-result", {
+        body: JSON.stringify({
+          caption: "ASCII video animation",
+          fileName: result.video.fileName || result.fileName,
+          initData,
+          mimeType: result.video.mimeType,
+          resultType: "videoMp4",
+          videoBase64: result.video.base64,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json()) as TelegramSendResponse;
+
+      if (!response.ok || payload.ok === false) {
+        const failedPayload: Extract<TelegramSendResponse, { ok: false }> =
+          payload.ok === false
+            ? payload
+            : {
+                message: "Could not send MP4.",
+                ok: false,
+              };
+
+        setSendStatus(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? "start bot"
+            : "send mp4",
+        );
+        setSendHelpUrl(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? failedPayload.startUrl || getBotStartUrl()
+            : "",
+        );
+        setSendError(
+          getTelegramSendErrorCopy(failedPayload, "Could not send MP4."),
+        );
+        return;
+      }
+
+      setSendStatus("done");
+    } catch (error) {
+      setSendStatus("send mp4");
+      setSendHelpUrl("");
+      setSendError(
+        error instanceof Error ? error.message : "Could not send MP4.",
+      );
     }
   };
 
@@ -124,6 +199,11 @@ export function VideoGenerator() {
               setPresetId(id);
               setFps(preset.fps);
               setWidth(preset.width);
+              setResult(null);
+              setError("");
+              setSendError("");
+              setSendHelpUrl("");
+              setSendStatus("send mp4");
               setStatus(file ? "style changed" : "idle");
             }}
           >
@@ -182,6 +262,9 @@ export function VideoGenerator() {
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
             setError("");
+            setSendError("");
+            setSendHelpUrl("");
+            setSendStatus("send mp4");
             setStatus(nextFile ? "video loaded" : "idle");
           }}
           type="file"
@@ -254,17 +337,32 @@ export function VideoGenerator() {
         </div>
       ) : null}
 
+      {sendError ? (
+        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+          {sendError}
+          {sendHelpUrl ? (
+            <button
+              className="mt-2 block min-h-9 w-full border border-red-300/70 bg-black px-3 text-xs font-black uppercase tracking-[0.12em] text-red-200 transition hover:bg-red-300 hover:text-black"
+              onClick={() => openBotStartUrl(sendHelpUrl)}
+              type="button"
+            >
+              start bot
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <GenerateButton disabled={!canGenerate} onClick={renderVideo}>
         {status === "processing" ? "rendering video" : "generate video"}
       </GenerateButton>
 
       <button
         className="min-h-10 w-full border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
-        disabled={!resultDataUrl}
-        onClick={() => downloadDataUrl(resultDataUrl, "ascii-animation.mp4")}
+        disabled={!resultDataUrl || sendStatus === "sending"}
+        onClick={sendVideoToTelegram}
         type="button"
       >
-        download mp4
+        {sendStatus}
       </button>
     </div>
   );

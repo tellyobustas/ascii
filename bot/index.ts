@@ -21,11 +21,20 @@ const webAppUrl = resolveTelegramWebAppUrl(process.env);
 const bot = createAsciiBot(token);
 
 bot.command("start", async (ctx) => {
+  const startPayload = typeof ctx.match === "string" ? ctx.match.trim() : "";
+  const heading =
+    startPayload === "ascii_export"
+      ? "ASCII bot connected."
+      : "ASCII is online.";
+
   await ctx.reply(
     [
-      "ASCII is online.",
+      heading,
       "",
       "Open the Mini App and turn text, images, and videos into terminal-style ASCII.",
+      startPayload === "ascii_export"
+        ? "Then return to the app and press export again."
+        : "",
     ].join("\n"),
     {
       reply_markup: createOpenAsciiKeyboard(webAppUrl),

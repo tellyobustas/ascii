@@ -8,6 +8,13 @@ import {
   IMAGE_ASCII_PRESETS,
   type ImageAsciiPresetId,
 } from "@/lib/ascii/image";
+import {
+  getBotStartUrl,
+  getTelegramInitData,
+  getTelegramSendErrorCopy,
+  openBotStartUrl,
+  type TelegramSendResponse,
+} from "@/lib/telegram/client-export";
 
 type ImageRenderResponse =
   | {
@@ -31,21 +38,17 @@ const imagePresetEntries = Object.entries(IMAGE_ASCII_PRESETS) as Array<
   [ImageAsciiPresetId, (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId]]
 >;
 
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const anchor = document.createElement("a");
-  anchor.href = dataUrl;
-  anchor.download = filename;
-  anchor.click();
-}
-
 export function ImageGenerator() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState("");
   const [presetId, setPresetId] = useState<ImageAsciiPresetId>("brailleColor");
   const [result, setResult] = useState<ImageRenderResponse | null>(null);
   const [status, setStatus] = useState("idle");
+  const [sendStatus, setSendStatus] = useState("send png");
   const [copyStatus, setCopyStatus] = useState("copy ascii");
   const [error, setError] = useState("");
+  const [sendError, setSendError] = useState("");
+  const [sendHelpUrl, setSendHelpUrl] = useState("");
 
   useEffect(() => {
     if (!fileUrl) return;
@@ -72,7 +75,10 @@ export function ImageGenerator() {
     }
 
     setStatus("rendering");
+    setSendStatus("send png");
     setError("");
+    setSendError("");
+    setSendHelpUrl("");
 
     const formData = new FormData();
     formData.set("file", file);
@@ -95,6 +101,7 @@ export function ImageGenerator() {
 
       setResult(payload);
       setStatus("done");
+      setSendStatus("send png");
     } catch {
       setResult({
         ok: false,
@@ -102,6 +109,74 @@ export function ImageGenerator() {
       });
       setError("Image render failed.");
       setStatus("error");
+    }
+  };
+
+  const sendImageToTelegram = async () => {
+    if (!result?.ok) return;
+
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      setSendStatus("start bot");
+      setSendHelpUrl(getBotStartUrl());
+      setSendError("Open ASCII from Telegram and press SEND PNG again.");
+      return;
+    }
+
+    try {
+      setSendStatus("sending");
+      setSendError("");
+      setSendHelpUrl("");
+
+      const response = await fetch("/api/telegram/send-result", {
+        body: JSON.stringify({
+          caption: "ASCII image",
+          fileName: result.fileName || "ascii-image.png",
+          imageBase64: result.image.base64,
+          initData,
+          mimeType: result.image.mimeType,
+          resultType: "imagePng",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json()) as TelegramSendResponse;
+
+      if (!response.ok || payload.ok === false) {
+        const failedPayload: Extract<TelegramSendResponse, { ok: false }> =
+          payload.ok === false
+            ? payload
+            : {
+                message: "Could not send PNG.",
+                ok: false,
+              };
+
+        setSendStatus(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? "start bot"
+            : "send png",
+        );
+        setSendHelpUrl(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? failedPayload.startUrl || getBotStartUrl()
+            : "",
+        );
+        setSendError(
+          getTelegramSendErrorCopy(failedPayload, "Could not send PNG."),
+        );
+        return;
+      }
+
+      setSendStatus("done");
+    } catch (error) {
+      setSendStatus("send png");
+      setSendHelpUrl("");
+      setSendError(
+        error instanceof Error ? error.message : "Could not send PNG.",
+      );
     }
   };
 
@@ -129,6 +204,9 @@ export function ImageGenerator() {
               setPresetId(id);
               setResult(null);
               setError("");
+              setSendError("");
+              setSendHelpUrl("");
+              setSendStatus("send png");
               setStatus(file ? "style changed" : "idle");
             }}
           >
@@ -147,6 +225,9 @@ export function ImageGenerator() {
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
             setError("");
+            setSendError("");
+            setSendHelpUrl("");
+            setSendStatus("send png");
             setStatus(nextFile ? "image loaded" : "idle");
           }}
           type="file"
@@ -209,6 +290,21 @@ export function ImageGenerator() {
         </div>
       ) : null}
 
+      {sendError ? (
+        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+          {sendError}
+          {sendHelpUrl ? (
+            <button
+              className="mt-2 block min-h-9 w-full border border-red-300/70 bg-black px-3 text-xs font-black uppercase tracking-[0.12em] text-red-200 transition hover:bg-red-300 hover:text-black"
+              onClick={() => openBotStartUrl(sendHelpUrl)}
+              type="button"
+            >
+              start bot
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <GenerateButton disabled={!canGenerate} onClick={renderImage}>
         {status === "rendering" ? "rendering image" : "generate image"}
       </GenerateButton>
@@ -216,11 +312,11 @@ export function ImageGenerator() {
       <div className="grid grid-cols-2 gap-2">
         <button
           className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
-          disabled={!resultDataUrl}
-          onClick={() => downloadDataUrl(resultDataUrl, "ascii-image.png")}
+          disabled={!resultDataUrl || sendStatus === "sending"}
+          onClick={sendImageToTelegram}
           type="button"
         >
-          download png
+          {sendStatus}
         </button>
         <button
           className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
