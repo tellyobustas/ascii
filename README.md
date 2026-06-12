@@ -2,7 +2,7 @@
 
 ASCII — Telegram Mini App и Telegram Bot для генераторов текста, изображений и видео в ASCII / Matrix / terminal стиле.
 
-Текущий этап: готов базовый проект, Telegram bot с кнопкой OPEN ASCII, главный экран Mini App, процедурный ASCII background, TEXT generator с live preview и исследованные engine presets для IMAGE/VIDEO.
+Текущий этап: готов базовый проект, Telegram bot с кнопкой OPEN ASCII, главный экран Mini App, процедурный ASCII background, рабочие TEXT / IMAGE / VIDEO генераторы для MVP.
 
 ## Стек
 
@@ -40,7 +40,7 @@ ASCII — Telegram Mini App и Telegram Bot для генераторов тек
 - [2dameneko/img-vid-ascii](https://github.com/2dameneko/img-vid-ascii): отдельный ASCII video container/job metadata подход, charsets, batch/video pipeline и recorder separation. В `lib/ascii/video.ts` добавлены stages, presets и metadata contract для будущего worker.
 - [collidingscopes ASCII](https://collidingscopes.github.io/ascii/): UX-паттерны live preview controls, effect width, style/resolution controls и browser-first preview. Для MVP это заложено как единые presets/limits, которые сможет читать frontend.
 
-Главный принцип: TEXT уже работает, IMAGE/VIDEO пока получают clean engine contracts и UI-подготовку, чтобы следующие этапы не начинались с хаотичных заглушек.
+Главный принцип: TEXT работает через figlet и canvas fitting, IMAGE работает через Sharp + ASCII/Braille/Dither PNG renderer, VIDEO работает через FFmpeg + тот же image renderer по кадрам и собирает silent H.264 MP4.
 
 ## Установка
 
@@ -83,14 +83,15 @@ Bot worker:
 4. Главный экран Mini App в terminal UI.
 5. Живой процедурный ASCII background.
 6. TEXT generator: figlet font select, font search, canvas ratio, live fit preview, copy ASCII.
-7. IMAGE/VIDEO presets и API metadata contracts.
+7. IMAGE generator: upload JPG/PNG/WebP, mode buttons, Sharp render, preview, download PNG, copy ASCII.
+8. VIDEO generator: upload MP4/MOV/WebM, mode buttons, fps/width controls, FFmpeg render, preview, download MP4.
 
 Следующие этапы добавят:
 
 1. Полную серверную проверку initData через BOT_TOKEN.
-2. Sharp renderer для IMAGE.
-3. FFmpeg worker для VIDEO.
-4. Отправку PNG/MP4 результата пользователю из backend/bot слоя.
+2. Отправку PNG/MP4 результата пользователю из backend/bot слоя.
+3. Асинхронный queue/job UI для долгого VIDEO render.
+4. Расширенные настройки яркости, контраста, density, invert и glow.
 
 Для локального теста Mini App в Telegram обычно понадобится публичный HTTPS URL, например через ngrok:
 

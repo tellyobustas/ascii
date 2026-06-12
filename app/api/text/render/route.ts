@@ -1,4 +1,15 @@
 import figlet from "figlet";
+import bannerFont from "figlet/fonts/Banner";
+import bigFont from "figlet/fonts/Big";
+import blockFont from "figlet/fonts/Block";
+import bubbleFont from "figlet/fonts/Bubble";
+import digitalFont from "figlet/fonts/Digital";
+import doomFont from "figlet/fonts/Doom";
+import graffitiFont from "figlet/fonts/Graffiti";
+import miniFont from "figlet/fonts/Mini";
+import slantFont from "figlet/fonts/Slant";
+import smallFont from "figlet/fonts/Small";
+import standardFont from "figlet/fonts/Standard";
 import { NextResponse } from "next/server";
 import {
   ASCII_FONT_PROFILES,
@@ -24,6 +35,30 @@ type TextRenderRequest = {
 };
 
 const MAX_TEXT_LENGTH = 96;
+const FIGLET_FONT_DATA: Record<AsciiFontName, string> = {
+  Banner: bannerFont,
+  Big: bigFont,
+  Block: blockFont,
+  Bubble: bubbleFont,
+  Digital: digitalFont,
+  Doom: doomFont,
+  Graffiti: graffitiFont,
+  Mini: miniFont,
+  Slant: slantFont,
+  Small: smallFont,
+  Standard: standardFont,
+};
+let figletFontsRegistered = false;
+
+function registerFigletFonts() {
+  if (figletFontsRegistered) return;
+
+  for (const fontName of ASCII_FONTS) {
+    figlet.parseFont(fontName, FIGLET_FONT_DATA[fontName], true);
+  }
+
+  figletFontsRegistered = true;
+}
 
 function cleanText(value: unknown) {
   if (typeof value !== "string") return "Type Something";
@@ -37,6 +72,8 @@ async function renderFigletText(
   font: AsciiFontName,
   preset: TextCanvasPresetId,
 ) {
+  registerFigletFonts();
+
   const canvas = TEXT_CANVAS_PRESETS[preset];
   const widths = [
     canvas.figletWidth,

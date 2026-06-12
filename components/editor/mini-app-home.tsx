@@ -1,12 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GenerateButton } from "@/components/editor/generate-button";
-import { OutputPreview } from "@/components/editor/output-preview";
-import { PresetButton } from "@/components/editor/preset-button";
+import { ImageGenerator } from "@/components/editor/image-generator";
 import { StatusPill } from "@/components/editor/status-pill";
 import { TextGenerator } from "@/components/editor/text-generator";
-import { UploadCard } from "@/components/editor/upload-card";
+import { VideoGenerator } from "@/components/editor/video-generator";
 import { IMAGE_ASCII_PRESETS } from "@/lib/ascii/image";
 import { VIDEO_ASCII_PRESETS, VIDEO_RENDER_LIMITS } from "@/lib/ascii/video";
 
@@ -147,49 +145,9 @@ export function MiniAppHome() {
             </code>
           </div>
 
-          {activeTab === "TEXT" ? (
-            <TextGenerator />
-          ) : (
-            <>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {activeMeta.presets.map((preset, index) => (
-                  <PresetButton active={index === 0} key={preset}>
-                    {preset}
-                  </PresetButton>
-                ))}
-              </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {activeMeta.details.map((detail) => (
-                  <div
-                    className="min-h-12 border border-ascii-green/20 bg-black px-2 py-2 text-[0.58rem] uppercase leading-4 tracking-[0.1em] text-ascii-white/48"
-                    key={detail}
-                  >
-                    {detail}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3">
-                <UploadCard label={"DROP " + activeTab.toLowerCase() + " FILE"} />
-              </div>
-
-              <div className="mt-3">
-                <OutputPreview label={activeTab + " PREVIEW"} />
-              </div>
-
-              <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
-                <StatusPill label={activeMeta.status} />
-                <span className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/45">
-                  idle
-                </span>
-              </div>
-
-              <div className="mt-4">
-                <GenerateButton disabled>generate soon</GenerateButton>
-              </div>
-            </>
-          )}
+          {activeTab === "TEXT" ? <TextGenerator /> : null}
+          {activeTab === "IMAGE" ? <ImageGenerator /> : null}
+          {activeTab === "VIDEO" ? <VideoGenerator /> : null}
         </section>
 
         <footer className="mt-auto pt-4 text-center text-[0.62rem] uppercase tracking-[0.18em] text-ascii-white/38">
