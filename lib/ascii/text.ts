@@ -132,6 +132,48 @@ export const TEXT_CANVAS_PRESETS = {
 
 export type TextCanvasPresetId = keyof typeof TEXT_CANVAS_PRESETS;
 
+export type TextVideoColorId =
+  | "green"
+  | "white"
+  | "amber"
+  | "cyan"
+  | "magenta";
+
+export const TEXT_VIDEO_COLORS: Record<
+  TextVideoColorId,
+  {
+    glow: string;
+    hex: string;
+    label: string;
+  }
+> = {
+  green: {
+    glow: "rgba(0, 255, 102, 0.62)",
+    hex: "#00ff66",
+    label: "green",
+  },
+  white: {
+    glow: "rgba(242, 242, 242, 0.52)",
+    hex: "#f2f2f2",
+    label: "white",
+  },
+  amber: {
+    glow: "rgba(255, 190, 64, 0.5)",
+    hex: "#ffbe40",
+    label: "amber",
+  },
+  cyan: {
+    glow: "rgba(80, 255, 220, 0.52)",
+    hex: "#50ffdc",
+    label: "cyan",
+  },
+  magenta: {
+    glow: "rgba(255, 80, 190, 0.45)",
+    hex: "#ff50be",
+    label: "magenta",
+  },
+};
+
 export function isAsciiFontName(font: string): font is AsciiFontName {
   return (ASCII_FONTS as readonly string[]).includes(font);
 }
@@ -140,4 +182,8 @@ export function isTextCanvasPresetId(
   preset: string,
 ): preset is TextCanvasPresetId {
   return Object.hasOwn(TEXT_CANVAS_PRESETS, preset);
+}
+
+export function isTextVideoColorId(color: string): color is TextVideoColorId {
+  return Object.hasOwn(TEXT_VIDEO_COLORS, color);
 }
