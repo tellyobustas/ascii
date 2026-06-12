@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ASCII_FONT_PROFILES,
   ASCII_FONTS,
   TEXT_CANVAS_PRESETS,
+  TEXT_FONT_GROUPS,
   type AsciiFontName,
   type TextCanvasPresetId,
 } from "@/lib/ascii/text";
@@ -36,6 +38,7 @@ const canvasPresetEntries = Object.entries(TEXT_CANVAS_PRESETS) as Array<
 export function TextGenerator() {
   const [text, setText] = useState("Type Something");
   const [font, setFont] = useState<AsciiFontName>("Graffiti");
+  const [fontQuery, setFontQuery] = useState("");
   const [canvasPreset, setCanvasPreset] =
     useState<TextCanvasPresetId>("telegramPost");
   const [renderResult, setRenderResult] = useState<TextRenderResponse | null>(
@@ -107,6 +110,26 @@ export function TextGenerator() {
     };
   }, [canvasPreset, font, text]);
 
+  const filteredFonts = useMemo(() => {
+    const query = fontQuery.trim().toLowerCase();
+
+    if (!query) return ASCII_FONTS;
+
+    return ASCII_FONTS.filter((fontName) => {
+      const profile = ASCII_FONT_PROFILES[fontName];
+      const searchBlob = [
+        fontName,
+        profile.mood,
+        profile.sample,
+        ...profile.searchTags,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchBlob.includes(query);
+    });
+  }, [fontQuery]);
+
   const copyAsciiText = async () => {
     if (!renderResult?.ok) return;
 
@@ -132,6 +155,15 @@ export function TextGenerator() {
     renderResult?.ok === true
       ? renderResult.canvas
       : TEXT_CANVAS_PRESETS[canvasPreset];
+  const activeFontProfile = ASCII_FONT_PROFILES[font];
+  const visibleFonts =
+    filteredFonts.length > 0
+      ? Array.from(new Set<AsciiFontName>([font, ...filteredFonts]))
+      : ASCII_FONTS;
+  const fontCountLabel =
+    fontQuery.trim() && filteredFonts.length === 0
+      ? "0 hits"
+      : String(filteredFonts.length || ASCII_FONTS.length) + " faces";
   const scale = previewWidth > 0 ? previewWidth / activeCanvas.width : 0;
 
   return (
@@ -165,7 +197,7 @@ export function TextGenerator() {
             }}
             value={font}
           >
-            {ASCII_FONTS.map((fontName) => (
+            {visibleFonts.map((fontName) => (
               <option key={fontName} value={fontName}>
                 {fontName}
               </option>
@@ -192,6 +224,87 @@ export function TextGenerator() {
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="grid gap-2">
+        <label className="block">
+          <span className="mb-2 block text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
+            font grep
+          </span>
+          <input
+            className="min-h-10 w-full border border-ascii-green/25 bg-black px-3 text-xs uppercase tracking-[0.1em] text-ascii-white placeholder:text-ascii-green/28 focus:border-ascii-green focus:ring-0"
+            onChange={(event) => setFontQuery(event.target.value)}
+            placeholder="poster / terminal / graffiti"
+            spellCheck={false}
+            value={fontQuery}
+          />
+        </label>
+
+        <div className="flex flex-wrap gap-1.5">
+          {TEXT_FONT_GROUPS.map((group) => (
+            <button
+              className="border border-ascii-green/25 bg-black px-2 py-1 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-ascii-green/70 transition hover:border-ascii-green hover:text-ascii-green"
+              key={group.label}
+              onClick={() => {
+                setStatus("rendering");
+                setFont(group.fonts[0]);
+              }}
+              type="button"
+            >
+              {group.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {visibleFonts.slice(0, 6).map((fontName) => {
+            const profile = ASCII_FONT_PROFILES[fontName];
+            const isActive = fontName === font;
+
+            return (
+              <button
+                className={
+                  "min-h-14 border px-2 py-2 text-left transition " +
+                  (isActive
+                    ? "border-ascii-green bg-ascii-green text-black"
+                    : "border-ascii-green/25 bg-black text-ascii-green hover:border-ascii-green")
+                }
+                key={fontName}
+                onClick={() => {
+                  setStatus("rendering");
+                  setFont(fontName);
+                }}
+                type="button"
+              >
+                <span className="block truncate text-[0.68rem] font-black uppercase tracking-[0.1em]">
+                  {fontName}
+                </span>
+                <span
+                  className={
+                    "mt-1 block truncate text-[0.62rem] " +
+                    (isActive ? "text-black/70" : "text-ascii-white/45")
+                  }
+                >
+                  {profile.sample}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border border-ascii-green/25 bg-black px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-ascii-green">
+              {font}
+            </span>
+            <span className="text-[0.58rem] uppercase tracking-[0.12em] text-ascii-white/45">
+              {fontCountLabel}
+            </span>
+          </div>
+          <p className="mt-1 text-[0.68rem] leading-4 text-ascii-white/55">
+            {activeFontProfile.mood}
+          </p>
+        </div>
       </div>
 
       <div

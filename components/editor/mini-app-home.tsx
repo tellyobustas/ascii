@@ -7,37 +7,55 @@ import { PresetButton } from "@/components/editor/preset-button";
 import { StatusPill } from "@/components/editor/status-pill";
 import { TextGenerator } from "@/components/editor/text-generator";
 import { UploadCard } from "@/components/editor/upload-card";
+import { IMAGE_ASCII_PRESETS } from "@/lib/ascii/image";
+import { VIDEO_ASCII_PRESETS, VIDEO_RENDER_LIMITS } from "@/lib/ascii/video";
 
 const tabs = ["TEXT", "IMAGE", "VIDEO"] as const;
 
 type TabName = (typeof tabs)[number];
+
+const imagePresetBadges = [
+  IMAGE_ASCII_PRESETS.brailleColor.shortLabel,
+  IMAGE_ASCII_PRESETS.bayerDither.shortLabel,
+  IMAGE_ASCII_PRESETS.blocks.shortLabel,
+];
+
+const videoPresetBadges = [
+  VIDEO_ASCII_PRESETS.telegramLoop.shortLabel,
+  VIDEO_ASCII_PRESETS.bayerMotion.shortLabel,
+  String(VIDEO_RENDER_LIMITS.defaultFps) + " FPS",
+];
 
 const tabMeta: Record<
   TabName,
   {
     command: string;
     copy: string;
+    details: string[];
     presets: string[];
     status: string;
   }
 > = {
   TEXT: {
-    command: "figlet --font slant --canvas tg-post",
-    copy: "ASCII text posters, channel cards and plain terminal output.",
+    command: "figlet --font graffiti --fit tg-post",
+    copy: "ASCII text posters with searchable figlet faces and canvas fitting.",
+    details: ["font search", "live fit", "copy ASCII"],
     presets: ["Standard", "Slant", "Doom"],
-    status: "text module queued",
+    status: "text module online",
   },
   IMAGE: {
-    command: "sharp input.png | dither --mode matrix",
-    copy: "Drop an image, tune density and render a clean terminal bitmap.",
-    presets: ["ASCII PNG", "Bayer", "1-bit"],
-    status: "image module queued",
+    command: "sharp input.png | braille --lit-color --threshold 50",
+    copy: "Image engine presets are prepared for braille, bitmap and dither output.",
+    details: ["2x4 braille map", "lit-pixel color", "contrast + sharpen"],
+    presets: imagePresetBadges,
+    status: "image engine mapped",
   },
   VIDEO: {
-    command: "ffmpeg -i clip.mp4 --ascii --h264",
-    copy: "Short silent MP4 animations built for Telegram loops.",
-    presets: ["8 FPS", "360 px", "No audio"],
-    status: "video module queued",
+    command: "ffmpeg -i clip.mp4 -an -pix_fmt yuv420p -movflags +faststart",
+    copy: "Video job contract is ready for short silent Telegram MP4 animations.",
+    details: ["job stages", "ascii container", "worker-ready"],
+    presets: videoPresetBadges,
+    status: "video pipeline mapped",
   },
 };
 
@@ -138,6 +156,17 @@ export function MiniAppHome() {
                   <PresetButton active={index === 0} key={preset}>
                     {preset}
                   </PresetButton>
+                ))}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {activeMeta.details.map((detail) => (
+                  <div
+                    className="min-h-12 border border-ascii-green/20 bg-black px-2 py-2 text-[0.58rem] uppercase leading-4 tracking-[0.1em] text-ascii-white/48"
+                    key={detail}
+                  >
+                    {detail}
+                  </div>
                 ))}
               </div>
 

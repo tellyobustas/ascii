@@ -1,8 +1,10 @@
 import figlet from "figlet";
 import { NextResponse } from "next/server";
 import {
+  ASCII_FONT_PROFILES,
   ASCII_FONTS,
   TEXT_CANVAS_PRESETS,
+  TEXT_FONT_GROUPS,
   isAsciiFontName,
   isTextCanvasPresetId,
   type AsciiFontName,
@@ -109,6 +111,8 @@ export async function POST(request: Request) {
       canvasPreset,
       fit: rendered.fit,
       font,
+      fontGroups: TEXT_FONT_GROUPS,
+      fontProfile: ASCII_FONT_PROFILES[font],
       fonts: ASCII_FONTS,
       text,
     });

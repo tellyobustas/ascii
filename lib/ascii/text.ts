@@ -16,6 +16,89 @@ export const ASCII_FONTS = [
 
 export type AsciiFontName = (typeof ASCII_FONTS)[number];
 
+export const ASCII_FONT_PROFILES: Record<
+  AsciiFontName,
+  {
+    mood: string;
+    sample: string;
+    searchTags: readonly string[];
+  }
+> = {
+  Standard: {
+    mood: "clean terminal headline",
+    sample: "ASCII",
+    searchTags: ["default", "clean", "readable", "terminal"],
+  },
+  Slant: {
+    mood: "italic hacker banner",
+    sample: "/ASCII/",
+    searchTags: ["italic", "dynamic", "classic", "patorjk"],
+  },
+  Big: {
+    mood: "large block poster",
+    sample: "A S C I I",
+    searchTags: ["poster", "wide", "bold", "title"],
+  },
+  Small: {
+    mood: "compact caption",
+    sample: "ascii",
+    searchTags: ["small", "compact", "caption", "telegram"],
+  },
+  Graffiti: {
+    mood: "street terminal logo",
+    sample: "ASCII!",
+    searchTags: ["graffiti", "logo", "wild", "display"],
+  },
+  Doom: {
+    mood: "heavy game title",
+    sample: "DOOM",
+    searchTags: ["heavy", "game", "dark", "title"],
+  },
+  Block: {
+    mood: "solid square letters",
+    sample: "BLOCK",
+    searchTags: ["block", "square", "poster", "bold"],
+  },
+  Bubble: {
+    mood: "rounded pop text",
+    sample: "(ASCII)",
+    searchTags: ["bubble", "round", "soft", "fun"],
+  },
+  Digital: {
+    mood: "retro clock display",
+    sample: "01:10",
+    searchTags: ["digital", "clock", "lcd", "numeric"],
+  },
+  Mini: {
+    mood: "tiny utility text",
+    sample: "mini",
+    searchTags: ["mini", "tiny", "dense", "caption"],
+  },
+  Banner: {
+    mood: "old-school terminal banner",
+    sample: "BANNER",
+    searchTags: ["banner", "classic", "wide", "oldschool"],
+  },
+};
+
+export const TEXT_FONT_GROUPS = [
+  {
+    label: "poster",
+    fonts: ["Big", "Block", "Banner", "Doom"],
+  },
+  {
+    label: "terminal",
+    fonts: ["Standard", "Slant", "Digital", "Mini"],
+  },
+  {
+    label: "expressive",
+    fonts: ["Graffiti", "Bubble", "Small"],
+  },
+] as const satisfies ReadonlyArray<{
+  fonts: readonly AsciiFontName[];
+  label: string;
+}>;
+
 export const TEXT_CANVAS_PRESETS = {
   square: {
     label: "1:1 square",
