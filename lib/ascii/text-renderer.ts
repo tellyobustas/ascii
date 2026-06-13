@@ -27,6 +27,7 @@ export type RenderedAsciiText = {
 };
 
 export const MAX_TEXT_LENGTH = 96;
+const TELEGRAM_PRE_GUARD = "\u2060";
 
 const FIGLET_FONT_DATA: Record<AsciiFontName, string> = {
   Banner: bannerFont,
@@ -145,11 +146,29 @@ export async function renderTelegramInlineAsciiText(
     }
   }
 
-  const normalized = bestAscii
+  const fittedLines = bestAscii
+    .replace(/\r/g, "")
     .split("\n")
-    .map((line) => line.replace(/\s+$/g, ""))
-    .join("\n")
-    .trim();
+    .map((line) => line.replace(/\s+$/g, ""));
+
+  while (fittedLines.length > 0 && fittedLines[0].trim() === "") {
+    fittedLines.shift();
+  }
+
+  while (
+    fittedLines.length > 0 &&
+    fittedLines[fittedLines.length - 1].trim() === ""
+  ) {
+    fittedLines.pop();
+  }
+
+  let normalized = fittedLines.join("\n");
+
+  // Telegram trims leading whitespace at the beginning of preformatted inline
+  // messages in some clients. A zero-width guard keeps the first row aligned.
+  if (/^\s/.test(normalized)) {
+    normalized = TELEGRAM_PRE_GUARD + normalized;
+  }
 
   if (normalized.length <= 3900) {
     return normalized;
