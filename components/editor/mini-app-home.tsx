@@ -63,7 +63,7 @@ function GlitchBrand() {
   return (
     <h1
       aria-label={BRAND}
-      className="ascii-logo ascii-logo-glitch whitespace-nowrap text-[1.02rem] font-black leading-none text-ascii-green min-[370px]:text-[1.18rem] min-[420px]:text-[1.34rem] sm:text-4xl"
+      className="ascii-logo ascii-logo-glitch whitespace-nowrap text-[0.92rem] font-black leading-none text-ascii-green min-[370px]:text-[1rem] min-[420px]:text-[1.16rem] sm:text-4xl"
     >
       {chars.map((char, index) => (
         <span
