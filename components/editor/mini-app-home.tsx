@@ -5,6 +5,7 @@ import { AsciilographMark } from "@/components/editor/asciilograph-mark";
 import { ImageGenerator } from "@/components/editor/image-generator";
 import { TextGenerator } from "@/components/editor/text-generator";
 import { VideoGenerator } from "@/components/editor/video-generator";
+import { loadTelegramWebAppSdk } from "@/lib/telegram/client-export";
 
 const tabs = ["TEXT", "IMAGE", "VIDEO"] as const;
 const BRAND = "ASCIILOGRAPH";
@@ -62,7 +63,7 @@ function GlitchBrand() {
   return (
     <h1
       aria-label={BRAND}
-      className="ascii-logo ascii-logo-glitch text-[1.72rem] font-black leading-none text-ascii-green sm:text-4xl"
+      className="ascii-logo ascii-logo-glitch whitespace-nowrap text-[1.02rem] font-black leading-none text-ascii-green min-[370px]:text-[1.18rem] min-[420px]:text-[1.34rem] sm:text-4xl"
     >
       {chars.map((char, index) => (
         <span
@@ -80,8 +81,20 @@ export function MiniAppHome() {
   const [activeTab, setActiveTab] = useState<TabName>("TEXT");
 
   useEffect(() => {
-    window.Telegram?.WebApp?.ready();
-    window.Telegram?.WebApp?.expand();
+    let isMounted = true;
+
+    void loadTelegramWebAppSdk()
+      .catch(() => undefined)
+      .then(() => {
+        if (!isMounted) return;
+
+        window.Telegram?.WebApp?.ready();
+        window.Telegram?.WebApp?.expand();
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const activeLabel = activeTab.toLowerCase();
@@ -95,11 +108,11 @@ export function MiniAppHome() {
             <span>online</span>
           </div>
 
-          <div className="flex items-center gap-3 pt-3">
+          <div className="flex items-center gap-2 pt-3 min-[390px]:gap-3">
             <AsciilographMark />
             <div className="min-w-0 flex-1">
               <GlitchBrand />
-              <p className="mt-2 text-[0.64rem] uppercase text-ascii-white/62">
+              <p className="mt-2 text-[0.54rem] uppercase text-ascii-white/62 min-[390px]:text-[0.62rem]">
                 text / image / video converter
               </p>
             </div>

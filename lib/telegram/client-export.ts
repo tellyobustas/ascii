@@ -16,6 +16,39 @@ export type TelegramSendResponse =
       startUrl?: string;
     };
 
+const TELEGRAM_WEB_APP_SDK_URL = "https://telegram.org/js/telegram-web-app.js";
+
+let telegramSdkPromise: Promise<void> | null = null;
+
+export function loadTelegramWebAppSdk() {
+  if (typeof window === "undefined") return Promise.resolve();
+
+  if (window.Telegram?.WebApp) return Promise.resolve();
+
+  if (telegramSdkPromise) return telegramSdkPromise;
+
+  telegramSdkPromise = new Promise((resolve, reject) => {
+    const currentScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${TELEGRAM_WEB_APP_SDK_URL}"]`,
+    );
+
+    if (currentScript) {
+      currentScript.addEventListener("load", () => resolve(), { once: true });
+      currentScript.addEventListener("error", () => reject(), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = TELEGRAM_WEB_APP_SDK_URL;
+    script.onload = () => resolve();
+    script.onerror = () => reject();
+    document.head.appendChild(script);
+  });
+
+  return telegramSdkPromise;
+}
+
 export function getTelegramInitData() {
   if (typeof window === "undefined") return "";
 

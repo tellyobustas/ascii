@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import { AsciiCloudBackground } from "@/components/ascii-background/ascii-cloud-background";
 import "./globals.css";
 
@@ -28,11 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru">
-      <Script
-        src="https://telegram.org/js/telegram-web-app.js"
-        strategy="beforeInteractive"
-      />
+    <html lang="ru" suppressHydrationWarning>
       <body className={geistMono.variable + " antialiased"}>
         <AsciiCloudBackground />
         <div className="relative z-10">{children}</div>
