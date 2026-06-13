@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { GenerateButton } from "@/components/editor/generate-button";
 import { PresetButton } from "@/components/editor/preset-button";
 import { StatusPill } from "@/components/editor/status-pill";
@@ -39,6 +39,11 @@ type VideoRenderResponse =
 const videoPresetEntries = Object.entries(VIDEO_ASCII_PRESETS) as Array<
   [VideoAsciiPresetId, (typeof VIDEO_ASCII_PRESETS)[VideoAsciiPresetId]]
 >;
+const videoMaxMegabytes = VIDEO_RENDER_LIMITS.maxInputFileBytes / 1024 / 1024;
+
+function formatMegabytes(bytes: number) {
+  return (bytes / 1024 / 1024).toFixed(2);
+}
 
 export function VideoGenerator() {
   const [file, setFile] = useState<File | null>(null);
@@ -68,11 +73,9 @@ export function VideoGenerator() {
       ? `data:${result.video.mimeType};base64,${result.video.base64}`
       : "";
   const canGenerate = Boolean(file) && status !== "processing";
-  const selectedFileMeta = useMemo(() => {
-    if (!file) return "no file";
-
-    return `${file.name} / ${(file.size / 1024 / 1024).toFixed(2)} MB`;
-  }, [file]);
+  const selectedFileMeta = file
+    ? `video ready / ${formatMegabytes(file.size)} MB`
+    : "drop / select MP4 MOV WEBM";
 
   const renderVideo = async () => {
     if (!file) {
@@ -258,6 +261,23 @@ export function VideoGenerator() {
           className="sr-only"
           onChange={(event) => {
             const nextFile = event.target.files?.[0] ?? null;
+
+            if (
+              nextFile &&
+              nextFile.size > VIDEO_RENDER_LIMITS.maxInputFileBytes
+            ) {
+              setFile(null);
+              setFileUrl("");
+              setResult(null);
+              setSendError("");
+              setSendHelpUrl("");
+              setSendStatus("send mp4");
+              setStatus("too large");
+              setError(`Video must be ${videoMaxMegabytes} MB or smaller.`);
+              event.target.value = "";
+              return;
+            }
+
             setFile(nextFile);
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
@@ -269,7 +289,13 @@ export function VideoGenerator() {
           }}
           type="file"
         />
-        {file ? selectedFileMeta : "drop / select MP4 MOV WEBM"}
+        <span className="space-y-2">
+          <span className="block text-ascii-green">{selectedFileMeta}</span>
+          <span className="block text-[0.62rem] leading-5 tracking-[0.14em] text-ascii-white/45">
+            mp4 mov webm / max {videoMaxMegabytes} mb / max{" "}
+            {VIDEO_RENDER_LIMITS.maxDurationSeconds} sec
+          </span>
+        </span>
       </label>
 
       <div className="grid grid-cols-2 gap-2">
@@ -320,7 +346,8 @@ export function VideoGenerator() {
       <div className="grid grid-cols-[1fr_auto] items-center gap-3">
         <StatusPill label={status} />
         <span className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/45">
-          max 15 sec / no audio
+          max {VIDEO_RENDER_LIMITS.maxDurationSeconds} sec / output under{" "}
+          {VIDEO_RENDER_LIMITS.maxOutputBytes / 1024 / 1024} mb
         </span>
       </div>
 

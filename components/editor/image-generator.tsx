@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { GenerateButton } from "@/components/editor/generate-button";
 import { PresetButton } from "@/components/editor/preset-button";
 import { StatusPill } from "@/components/editor/status-pill";
 import {
   IMAGE_ASCII_PRESETS,
+  IMAGE_LIMITS,
   type ImageAsciiPresetId,
 } from "@/lib/ascii/image";
 import {
@@ -37,6 +38,11 @@ type ImageRenderResponse =
 const imagePresetEntries = Object.entries(IMAGE_ASCII_PRESETS) as Array<
   [ImageAsciiPresetId, (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId]]
 >;
+const imageMaxMegabytes = IMAGE_LIMITS.maxFileBytes / 1024 / 1024;
+
+function formatMegabytes(bytes: number) {
+  return (bytes / 1024 / 1024).toFixed(2);
+}
 
 export function ImageGenerator() {
   const [file, setFile] = useState<File | null>(null);
@@ -62,11 +68,9 @@ export function ImageGenerator() {
       : "";
   const activePreset = IMAGE_ASCII_PRESETS[presetId];
   const canGenerate = Boolean(file) && status !== "rendering";
-  const selectedFileMeta = useMemo(() => {
-    if (!file) return "no file";
-
-    return `${file.name} / ${(file.size / 1024 / 1024).toFixed(2)} MB`;
-  }, [file]);
+  const selectedFileMeta = file
+    ? `image ready / ${formatMegabytes(file.size)} MB`
+    : "drop / select JPG PNG WEBP";
 
   const renderImage = async () => {
     if (!file) {
@@ -221,6 +225,20 @@ export function ImageGenerator() {
           className="sr-only"
           onChange={(event) => {
             const nextFile = event.target.files?.[0] ?? null;
+
+            if (nextFile && nextFile.size > IMAGE_LIMITS.maxFileBytes) {
+              setFile(null);
+              setFileUrl("");
+              setResult(null);
+              setSendError("");
+              setSendHelpUrl("");
+              setSendStatus("send png");
+              setStatus("too large");
+              setError(`Image must be ${imageMaxMegabytes} MB or smaller.`);
+              event.target.value = "";
+              return;
+            }
+
             setFile(nextFile);
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
@@ -232,7 +250,13 @@ export function ImageGenerator() {
           }}
           type="file"
         />
-        {file ? selectedFileMeta : "drop / select JPG PNG WEBP"}
+        <span className="space-y-2">
+          <span className="block text-ascii-green">{selectedFileMeta}</span>
+          <span className="block text-[0.62rem] leading-5 tracking-[0.14em] text-ascii-white/45">
+            jpg png webp / max {imageMaxMegabytes} mb / max{" "}
+            {IMAGE_LIMITS.maxInputWidth}x{IMAGE_LIMITS.maxInputHeight}px
+          </span>
+        </span>
       </label>
 
       <div className="grid grid-cols-2 gap-2">
