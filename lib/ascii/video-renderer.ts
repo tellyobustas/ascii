@@ -25,6 +25,8 @@ export type RenderedAsciiVideo = {
   mp4: Buffer;
   presetId: VideoAsciiPresetId;
   renderedFrames: number;
+  sourceDurationSeconds: number;
+  wasTrimmed: boolean;
 };
 
 const VIDEO_TO_IMAGE_PRESET: Record<VideoAsciiPresetId, string> = {
@@ -173,8 +175,12 @@ export async function renderVideoToAsciiMp4(
     await writeFile(inputPath, input);
 
     const info = await readVideoInfo(inputPath);
+    const renderDurationSeconds = Math.min(
+      info.durationSeconds,
+      VIDEO_RENDER_LIMITS.maxDurationSeconds,
+    );
     const plan = buildVideoJobPlan({
-      durationSeconds: info.durationSeconds,
+      durationSeconds: renderDurationSeconds,
       fps: options.fps,
       presetId,
       width: options.width,
@@ -189,7 +195,7 @@ export async function renderVideoToAsciiMp4(
       "-i",
       inputPath,
       "-t",
-      String(Math.min(info.durationSeconds, VIDEO_RENDER_LIMITS.maxDurationSeconds)),
+      String(renderDurationSeconds),
       "-vf",
       `fps=${plan.fps},scale=${plan.width}:-2:force_original_aspect_ratio=decrease`,
       "-an",
@@ -245,13 +251,15 @@ export async function renderVideoToAsciiMp4(
     const mp4 = await readFile(outputPath);
 
     return {
-      durationSeconds: info.durationSeconds,
+      durationSeconds: renderDurationSeconds,
       estimatedFrames: plan.estimatedFrames,
       fileName: "ascii-animation.mp4",
       mimeType: "video/mp4",
       mp4,
       presetId,
       renderedFrames: frames.length,
+      sourceDurationSeconds: info.durationSeconds,
+      wasTrimmed: info.durationSeconds > VIDEO_RENDER_LIMITS.maxDurationSeconds,
     };
   } finally {
     await rm(workDir, {

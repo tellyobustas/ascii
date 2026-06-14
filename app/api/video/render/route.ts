@@ -72,6 +72,8 @@ export async function POST(request: Request) {
         fileName: rendered.fileName,
         mimeType: rendered.mimeType,
         renderedFrames: rendered.renderedFrames,
+        sourceDurationSeconds: rendered.sourceDurationSeconds,
+        wasTrimmed: rendered.wasTrimmed,
       },
     });
   } catch (error) {

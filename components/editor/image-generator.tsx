@@ -35,6 +35,22 @@ type ImageRenderResponse =
       message: string;
     };
 
+type ImageQualityReport = {
+  metrics: {
+    brightness: number;
+    clipping: number;
+    contrast: number;
+    detail: number;
+    dimensions: string;
+  };
+  recommendation: string;
+  recommendedPresetId: ImageAsciiPresetId;
+  score: number;
+  tone: string;
+  verdict: string;
+  warnings: string[];
+};
+
 const imagePresetEntries = Object.entries(IMAGE_ASCII_PRESETS) as Array<
   [ImageAsciiPresetId, (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId]]
 >;
@@ -42,6 +58,182 @@ const imageMaxMegabytes = IMAGE_LIMITS.maxFileBytes / 1024 / 1024;
 
 function formatMegabytes(bytes: number) {
   return (bytes / 1024 / 1024).toFixed(2);
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not analyze image."));
+    image.src = src;
+  });
+}
+
+async function analyzeImageQuality(
+  src: string,
+  fileBytes: number,
+): Promise<ImageQualityReport> {
+  const image = await loadImageElement(src);
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const scale = Math.min(160 / sourceWidth, 160 / sourceHeight, 1);
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!context) {
+    throw new Error("Could not analyze image.");
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const pixels = context.getImageData(0, 0, width, height).data;
+  const lumas = new Array<number>(width * height);
+  let lumaSum = 0;
+  let colorSum = 0;
+  let darkPixels = 0;
+  let lightPixels = 0;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const red = pixels[index] ?? 0;
+    const green = pixels[index + 1] ?? 0;
+    const blue = pixels[index + 2] ?? 0;
+    const luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+    const pixelIndex = index / 4;
+
+    lumas[pixelIndex] = luma;
+    lumaSum += luma;
+    colorSum += Math.max(red, green, blue) - Math.min(red, green, blue);
+
+    if (luma < 24) darkPixels += 1;
+    if (luma > 232) lightPixels += 1;
+  }
+
+  const pixelCount = Math.max(1, lumas.length);
+  const brightness = lumaSum / pixelCount;
+  const variance =
+    lumas.reduce((total, luma) => total + (luma - brightness) ** 2, 0) /
+    pixelCount;
+  const contrast = Math.sqrt(variance);
+  let edgeSum = 0;
+  let edgeSamples = 0;
+
+  for (let y = 1; y < height; y += 1) {
+    for (let x = 1; x < width; x += 1) {
+      const index = y * width + x;
+      edgeSum +=
+        Math.abs((lumas[index] ?? 0) - (lumas[index - 1] ?? 0)) +
+        Math.abs((lumas[index] ?? 0) - (lumas[index - width] ?? 0));
+      edgeSamples += 1;
+    }
+  }
+
+  const detail = edgeSamples > 0 ? edgeSum / edgeSamples / 255 : 0;
+  const clipping = (darkPixels + lightPixels) / pixelCount;
+  const colorfulness = colorSum / pixelCount;
+  const shortSide = Math.min(sourceWidth, sourceHeight);
+  const aspectRatio = sourceWidth / Math.max(1, sourceHeight);
+  const warnings: string[] = [];
+  let score = 100;
+
+  if (fileBytes > IMAGE_LIMITS.maxFileBytes * 0.85) score -= 6;
+  if (shortSide < 360) {
+    score -= 16;
+    warnings.push("low resolution: use a sharper source");
+  }
+  if (contrast < 26) {
+    score -= 28;
+    warnings.push("low contrast: use FLOYD or edit contrast first");
+  } else if (contrast < 40) {
+    score -= 12;
+    warnings.push("soft contrast: FLOYD keeps gradients cleaner");
+  }
+  if (brightness < 48) {
+    score -= 18;
+    warnings.push("dark source: MATRIX or MONO will read better");
+  } else if (brightness > 210) {
+    score -= 16;
+    warnings.push("bright source: crop away white background");
+  }
+  if (clipping > 0.55) {
+    score -= 20;
+    warnings.push("large flat areas: BLOCKS or MONO will be cleaner");
+  } else if (clipping > 0.35) {
+    score -= 9;
+  }
+  if (detail < 0.035) {
+    score -= 20;
+    warnings.push("low detail: crop closer to the subject");
+  } else if (detail > 0.24) {
+    score -= 8;
+    warnings.push("busy detail: crop tighter or use BAYER");
+  }
+  if (aspectRatio > 2.2 || aspectRatio < 0.45) {
+    score -= 7;
+    warnings.push("wide/tall frame: square crop will render stronger");
+  }
+
+  let recommendedPresetId: ImageAsciiPresetId = "brailleColor";
+  let recommendation = "BRAILLE COLOR should preserve detail and color best.";
+  let tone = "good source";
+
+  if (contrast < 30 || detail < 0.04) {
+    recommendedPresetId = "floydSteinberg";
+    recommendation = "FLOYD rescues soft gradients and low detail.";
+    tone = "soft / low contrast";
+  } else if (clipping > 0.42 && detail > 0.055) {
+    recommendedPresetId = colorfulness > 34 ? "blocks" : "brailleMono";
+    recommendation =
+      colorfulness > 34
+        ? "BLOCKS keeps the strong silhouette readable."
+        : "MONO keeps hard edges clean without color noise.";
+    tone = "logo / silhouette";
+  } else if (brightness < 62) {
+    recommendedPresetId = "matrixAscii";
+    recommendation = "MATRIX makes dark sources survive in green terminal mode.";
+    tone = "dark source";
+  } else if (detail > 0.2) {
+    recommendedPresetId = "bayerDither";
+    recommendation = "BAYER calms busy texture with stable ordered dither.";
+    tone = "busy detail";
+  } else if (colorfulness < 18) {
+    recommendedPresetId = "brailleMono";
+    recommendation = "MONO is cleaner for low-color images.";
+    tone = "low color";
+  }
+
+  const qualityScore = clampScore(score);
+  const verdict =
+    qualityScore >= 82
+      ? "excellent for ascii"
+      : qualityScore >= 64
+        ? "good with suggested preset"
+        : qualityScore >= 44
+          ? "needs crop or contrast"
+          : "weak source for ascii";
+
+  return {
+    metrics: {
+      brightness: Math.round(brightness),
+      clipping: Math.round(clipping * 100),
+      contrast: Math.round(contrast),
+      detail: Math.round(detail * 100),
+      dimensions: `${sourceWidth}x${sourceHeight}`,
+    },
+    recommendation,
+    recommendedPresetId,
+    score: qualityScore,
+    tone,
+    verdict,
+    warnings: warnings.slice(0, 3),
+  };
 }
 
 export function ImageGenerator() {
@@ -53,6 +245,9 @@ export function ImageGenerator() {
   const [sendStatus, setSendStatus] = useState("send png");
   const [copyStatus, setCopyStatus] = useState("copy ascii");
   const [error, setError] = useState("");
+  const [qualityReport, setQualityReport] =
+    useState<ImageQualityReport | null>(null);
+  const [qualityStatus, setQualityStatus] = useState("");
   const [sendError, setSendError] = useState("");
   const [sendHelpUrl, setSendHelpUrl] = useState("");
 
@@ -61,6 +256,32 @@ export function ImageGenerator() {
 
     return () => URL.revokeObjectURL(fileUrl);
   }, [fileUrl]);
+
+  useEffect(() => {
+    if (!file || !fileUrl) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    void analyzeImageQuality(fileUrl, file.size)
+      .then((report) => {
+        if (!isCurrent) return;
+
+        setQualityReport(report);
+        setQualityStatus("quality ready");
+      })
+      .catch(() => {
+        if (!isCurrent) return;
+
+        setQualityReport(null);
+        setQualityStatus("quality unavailable");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [file, fileUrl]);
 
   const resultDataUrl =
     result?.ok === true
@@ -230,6 +451,8 @@ export function ImageGenerator() {
               setFile(null);
               setFileUrl("");
               setResult(null);
+              setQualityReport(null);
+              setQualityStatus("");
               setSendError("");
               setSendHelpUrl("");
               setSendStatus("send png");
@@ -242,6 +465,8 @@ export function ImageGenerator() {
             setFile(nextFile);
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
+            setQualityReport(null);
+            setQualityStatus(nextFile ? "analyzing source" : "");
             setError("");
             setSendError("");
             setSendHelpUrl("");
@@ -258,6 +483,81 @@ export function ImageGenerator() {
           </span>
         </span>
       </label>
+
+      {qualityStatus ? (
+        <div className="border border-ascii-green/25 bg-black px-3 py-3 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/58">
+          {qualityReport ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-black text-ascii-green">
+                  quality meter
+                </span>
+                <span className="text-ascii-white/72">
+                  {qualityReport.score}/100
+                </span>
+              </div>
+              <div className="h-1.5 border border-ascii-green/30 bg-black">
+                <div
+                  className="h-full bg-ascii-green"
+                  style={{ width: `${qualityReport.score}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-[1fr_auto] gap-3">
+                <span>{qualityReport.verdict}</span>
+                <span className="text-ascii-green/72">
+                  {qualityReport.tone}
+                </span>
+              </div>
+              <div className="border border-ascii-green/20 px-2 py-2 text-ascii-white/68">
+                best:{" "}
+                <span className="text-ascii-green">
+                  {
+                    IMAGE_ASCII_PRESETS[qualityReport.recommendedPresetId]
+                      .shortLabel
+                  }
+                </span>{" "}
+                / {qualityReport.recommendation}
+              </div>
+              {qualityReport.recommendedPresetId !== presetId ? (
+                <button
+                  className="min-h-9 w-full border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+                  onClick={() => {
+                    setPresetId(qualityReport.recommendedPresetId);
+                    setResult(null);
+                    setError("");
+                    setSendError("");
+                    setSendHelpUrl("");
+                    setSendStatus("send png");
+                    setStatus(file ? "style changed" : "idle");
+                  }}
+                  type="button"
+                >
+                  apply{" "}
+                  {
+                    IMAGE_ASCII_PRESETS[qualityReport.recommendedPresetId]
+                      .shortLabel
+                  }
+                </button>
+              ) : null}
+              <div className="text-ascii-white/42">
+                {qualityReport.metrics.dimensions} / contrast{" "}
+                {qualityReport.metrics.contrast} / detail{" "}
+                {qualityReport.metrics.detail} / clipped{" "}
+                {qualityReport.metrics.clipping}%
+              </div>
+              {qualityReport.warnings.length > 0 ? (
+                <div className="space-y-1 text-ascii-white/52">
+                  {qualityReport.warnings.map((warning) => (
+                    <div key={warning}>- {warning}</div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span>{qualityStatus}</span>
+          )}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2">
         <div className="border border-ascii-green/25 bg-black p-2">

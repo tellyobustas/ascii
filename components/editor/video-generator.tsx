@@ -29,6 +29,8 @@ type VideoRenderResponse =
         fileName: string;
         mimeType: "video/mp4";
         renderedFrames: number;
+        sourceDurationSeconds: number;
+        wasTrimmed: boolean;
       };
     }
   | {
@@ -292,7 +294,7 @@ export function VideoGenerator() {
         <span className="space-y-2">
           <span className="block text-ascii-green">{selectedFileMeta}</span>
           <span className="block text-[0.62rem] leading-5 tracking-[0.14em] text-ascii-white/45">
-            mp4 mov webm / max {videoMaxMegabytes} mb / max{" "}
+            mp4 mov webm / max {videoMaxMegabytes} mb / auto trim{" "}
             {VIDEO_RENDER_LIMITS.maxDurationSeconds} sec
           </span>
         </span>
@@ -346,7 +348,7 @@ export function VideoGenerator() {
       <div className="grid grid-cols-[1fr_auto] items-center gap-3">
         <StatusPill label={status} />
         <span className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/45">
-          max {VIDEO_RENDER_LIMITS.maxDurationSeconds} sec / output under{" "}
+          first {VIDEO_RENDER_LIMITS.maxDurationSeconds} sec / output under{" "}
           {VIDEO_RENDER_LIMITS.maxOutputBytes / 1024 / 1024} mb
         </span>
       </div>
@@ -355,6 +357,13 @@ export function VideoGenerator() {
         <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/55">
           {result.video.renderedFrames} frames /{" "}
           {result.video.durationSeconds.toFixed(2)} sec
+          {result.video.wasTrimmed ? (
+            <>
+              {" "}
+              / auto trimmed from{" "}
+              {result.video.sourceDurationSeconds.toFixed(2)} sec
+            </>
+          ) : null}
         </div>
       ) : null}
 
