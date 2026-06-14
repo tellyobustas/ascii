@@ -47,6 +47,14 @@ function formatMegabytes(bytes: number) {
   return (bytes / 1024 / 1024).toFixed(2);
 }
 
+function getTelegramSendLabel(sendStatus: string) {
+  if (sendStatus === "sending") return "sending";
+  if (sendStatus === "done") return "sent";
+  if (sendStatus === "start bot") return "start bot";
+
+  return "send to telegram";
+}
+
 export function VideoGenerator() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState("");
@@ -59,8 +67,9 @@ export function VideoGenerator() {
   >(VIDEO_RENDER_LIMITS.defaultWidth);
   const [result, setResult] = useState<VideoRenderResponse | null>(null);
   const [status, setStatus] = useState("idle");
+  const [renderProgress, setRenderProgress] = useState(0);
   const [error, setError] = useState("");
-  const [sendStatus, setSendStatus] = useState("send mp4");
+  const [sendStatus, setSendStatus] = useState("send to telegram");
   const [sendError, setSendError] = useState("");
   const [sendHelpUrl, setSendHelpUrl] = useState("");
 
@@ -78,6 +87,8 @@ export function VideoGenerator() {
   const selectedFileMeta = file
     ? `video ready / ${formatMegabytes(file.size)} MB`
     : "drop / select MP4 MOV WEBM";
+  const isRenderingVideo = status === "processing";
+  const showRenderProgress = isRenderingVideo || renderProgress > 0;
 
   const renderVideo = async () => {
     if (!file) {
@@ -89,7 +100,20 @@ export function VideoGenerator() {
     setError("");
     setSendError("");
     setSendHelpUrl("");
-    setSendStatus("send mp4");
+    setSendStatus("send to telegram");
+    setResult(null);
+    setRenderProgress(4);
+
+    const progressTimer = window.setInterval(() => {
+      setRenderProgress((currentProgress) => {
+        if (currentProgress >= 94) return currentProgress;
+
+        const nextProgress =
+          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.07));
+
+        return Math.min(94, nextProgress);
+      });
+    }, 320);
 
     const formData = new FormData();
     formData.set("file", file);
@@ -109,12 +133,14 @@ export function VideoGenerator() {
         setResult(payload);
         setError(message);
         setStatus("error");
+        setRenderProgress(0);
         return;
       }
 
       setResult(payload);
       setStatus("done");
-      setSendStatus("send mp4");
+      setSendStatus("send to telegram");
+      setRenderProgress(100);
     } catch {
       setResult({
         ok: false,
@@ -122,6 +148,9 @@ export function VideoGenerator() {
       });
       setError("Video render failed.");
       setStatus("error");
+      setRenderProgress(0);
+    } finally {
+      window.clearInterval(progressTimer);
     }
   };
 
@@ -133,7 +162,9 @@ export function VideoGenerator() {
     if (!initData) {
       setSendStatus("start bot");
       setSendHelpUrl(getBotStartUrl());
-      setSendError("Open ASCII from Telegram and press SEND MP4 again.");
+      setSendError(
+        "Open ASCIILOGRAPH from Telegram and press SEND TO TELEGRAM again.",
+      );
       return;
     }
 
@@ -170,7 +201,7 @@ export function VideoGenerator() {
         setSendStatus(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? "start bot"
-            : "send mp4",
+            : "send to telegram",
         );
         setSendHelpUrl(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
@@ -185,7 +216,7 @@ export function VideoGenerator() {
 
       setSendStatus("done");
     } catch (error) {
-      setSendStatus("send mp4");
+      setSendStatus("send to telegram");
       setSendHelpUrl("");
       setSendError(
         error instanceof Error ? error.message : "Could not send MP4.",
@@ -208,7 +239,8 @@ export function VideoGenerator() {
               setError("");
               setSendError("");
               setSendHelpUrl("");
-              setSendStatus("send mp4");
+              setSendStatus("send to telegram");
+              setRenderProgress(0);
               setStatus(file ? "style changed" : "idle");
             }}
           >
@@ -273,7 +305,8 @@ export function VideoGenerator() {
               setResult(null);
               setSendError("");
               setSendHelpUrl("");
-              setSendStatus("send mp4");
+              setSendStatus("send to telegram");
+              setRenderProgress(0);
               setStatus("too large");
               setError(`Video must be ${videoMaxMegabytes} MB or smaller.`);
               event.target.value = "";
@@ -286,7 +319,8 @@ export function VideoGenerator() {
             setError("");
             setSendError("");
             setSendHelpUrl("");
-            setSendStatus("send mp4");
+            setSendStatus("send to telegram");
+            setRenderProgress(0);
             setStatus(nextFile ? "video loaded" : "idle");
           }}
           type="file"
@@ -353,6 +387,21 @@ export function VideoGenerator() {
         </span>
       </div>
 
+      {showRenderProgress ? (
+        <div className="border border-ascii-green/25 bg-black px-3 py-3 text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/58">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span>{isRenderingVideo ? "rendering mp4" : "render ready"}</span>
+            <span className="text-ascii-green">{renderProgress}%</span>
+          </div>
+          <div className="h-2 border border-ascii-green/30 bg-black">
+            <div
+              className="h-full bg-ascii-green shadow-[0_0_16px_rgba(0,255,102,0.35)] transition-[width] duration-300"
+              style={{ width: `${renderProgress}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {result?.ok ? (
         <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/55">
           {result.video.renderedFrames} frames /{" "}
@@ -398,8 +447,34 @@ export function VideoGenerator() {
         onClick={sendVideoToTelegram}
         type="button"
       >
-        {sendStatus}
+        {getTelegramSendLabel(sendStatus)}
       </button>
+
+      {sendStatus === "done" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={() => {
+              setResult(null);
+              setSendStatus("send to telegram");
+              setSendError("");
+              setSendHelpUrl("");
+              setRenderProgress(0);
+              setStatus(file ? "style changed" : "idle");
+            }}
+            type="button"
+          >
+            try another style
+          </button>
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={sendVideoToTelegram}
+            type="button"
+          >
+            post again
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

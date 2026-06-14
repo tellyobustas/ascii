@@ -76,6 +76,14 @@ const textVideoColorEntries = Object.entries(TEXT_VIDEO_COLORS) as Array<
   [TextVideoColorId, (typeof TEXT_VIDEO_COLORS)[TextVideoColorId]]
 >;
 
+function getTelegramSendLabel(sendStatus: string) {
+  if (sendStatus === "sending") return "sending";
+  if (sendStatus === "done") return "sent";
+  if (sendStatus === "start bot") return "start bot";
+
+  return "send to telegram";
+}
+
 export function TextGenerator() {
   const [text, setText] = useState("Send Nudes");
   const [font, setFont] = useState<AsciiFontName>("Graffiti");
@@ -89,7 +97,7 @@ export function TextGenerator() {
   const [videoResult, setVideoResult] = useState<TextVideoResponse | null>(null);
   const [status, setStatus] = useState("rendering");
   const [videoStatus, setVideoStatus] = useState("ready for mp4");
-  const [sendStatus, setSendStatus] = useState("send pending");
+  const [sendStatus, setSendStatus] = useState("send to telegram");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendHelpUrl, setSendHelpUrl] = useState("");
   const [textPostStatus, setTextPostStatus] = useState("publish text");
@@ -183,7 +191,7 @@ export function TextGenerator() {
   const resetTextVideo = () => {
     setVideoResult(null);
     setVideoStatus("ready for mp4");
-    setSendStatus("send pending");
+    setSendStatus("send to telegram");
     setSendError(null);
     setSendHelpUrl("");
     setTextPostStatus("publish text");
@@ -298,7 +306,7 @@ export function TextGenerator() {
     try {
       setVideoStatus("rendering mp4");
       setVideoResult(null);
-      setSendStatus("send pending");
+      setSendStatus("send to telegram");
       setSendError(null);
       setSendHelpUrl("");
       setVideoProgress(4);
@@ -361,7 +369,9 @@ export function TextGenerator() {
     if (!initData) {
       setSendStatus("start bot");
       setSendHelpUrl(getBotStartUrl());
-      setSendError("Open ASCII from Telegram and press SAVE MP4 again.");
+      setSendError(
+        "Open ASCIILOGRAPH from Telegram and press SEND TO TELEGRAM again.",
+      );
       return;
     }
 
@@ -398,7 +408,7 @@ export function TextGenerator() {
         setSendStatus(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? "start bot"
-            : "send error",
+            : "send to telegram",
         );
         setSendHelpUrl(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
@@ -416,7 +426,7 @@ export function TextGenerator() {
 
       setSendStatus("done");
     } catch (error) {
-      setSendStatus("send error");
+      setSendStatus("send to telegram");
       setSendHelpUrl("");
       setSendError(
         error instanceof Error
@@ -742,9 +752,35 @@ export function TextGenerator() {
           onClick={sendTextVideoToTelegram}
           type="button"
         >
-          {isSending ? "sending" : sendStatus === "done" ? "done" : "save mp4"}
+          {getTelegramSendLabel(sendStatus)}
         </button>
       </div>
+
+      {sendStatus === "done" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={() => {
+              setVideoResult(null);
+              setVideoStatus("ready for mp4");
+              setSendStatus("send to telegram");
+              setSendError(null);
+              setSendHelpUrl("");
+              setVideoProgress(0);
+            }}
+            type="button"
+          >
+            try another style
+          </button>
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={sendTextVideoToTelegram}
+            type="button"
+          >
+            post again
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

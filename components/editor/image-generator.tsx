@@ -60,6 +60,14 @@ function formatMegabytes(bytes: number) {
   return (bytes / 1024 / 1024).toFixed(2);
 }
 
+function getTelegramSendLabel(sendStatus: string) {
+  if (sendStatus === "sending") return "sending";
+  if (sendStatus === "done") return "sent";
+  if (sendStatus === "start bot") return "start bot";
+
+  return "send to telegram";
+}
+
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -242,7 +250,7 @@ export function ImageGenerator() {
   const [presetId, setPresetId] = useState<ImageAsciiPresetId>("brailleColor");
   const [result, setResult] = useState<ImageRenderResponse | null>(null);
   const [status, setStatus] = useState("idle");
-  const [sendStatus, setSendStatus] = useState("send png");
+  const [sendStatus, setSendStatus] = useState("send to telegram");
   const [copyStatus, setCopyStatus] = useState("copy ascii");
   const [error, setError] = useState("");
   const [qualityReport, setQualityReport] =
@@ -300,7 +308,7 @@ export function ImageGenerator() {
     }
 
     setStatus("rendering");
-    setSendStatus("send png");
+    setSendStatus("send to telegram");
     setError("");
     setSendError("");
     setSendHelpUrl("");
@@ -326,7 +334,7 @@ export function ImageGenerator() {
 
       setResult(payload);
       setStatus("done");
-      setSendStatus("send png");
+      setSendStatus("send to telegram");
     } catch {
       setResult({
         ok: false,
@@ -345,7 +353,9 @@ export function ImageGenerator() {
     if (!initData) {
       setSendStatus("start bot");
       setSendHelpUrl(getBotStartUrl());
-      setSendError("Open ASCII from Telegram and press SEND PNG again.");
+      setSendError(
+        "Open ASCIILOGRAPH from Telegram and press SEND TO TELEGRAM again.",
+      );
       return;
     }
 
@@ -382,7 +392,7 @@ export function ImageGenerator() {
         setSendStatus(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? "start bot"
-            : "send png",
+            : "send to telegram",
         );
         setSendHelpUrl(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
@@ -397,7 +407,7 @@ export function ImageGenerator() {
 
       setSendStatus("done");
     } catch (error) {
-      setSendStatus("send png");
+      setSendStatus("send to telegram");
       setSendHelpUrl("");
       setSendError(
         error instanceof Error ? error.message : "Could not send PNG.",
@@ -431,7 +441,7 @@ export function ImageGenerator() {
               setError("");
               setSendError("");
               setSendHelpUrl("");
-              setSendStatus("send png");
+              setSendStatus("send to telegram");
               setStatus(file ? "style changed" : "idle");
             }}
           >
@@ -455,7 +465,7 @@ export function ImageGenerator() {
               setQualityStatus("");
               setSendError("");
               setSendHelpUrl("");
-              setSendStatus("send png");
+              setSendStatus("send to telegram");
               setStatus("too large");
               setError(`Image must be ${imageMaxMegabytes} MB or smaller.`);
               event.target.value = "";
@@ -470,7 +480,7 @@ export function ImageGenerator() {
             setError("");
             setSendError("");
             setSendHelpUrl("");
-            setSendStatus("send png");
+            setSendStatus("send to telegram");
             setStatus(nextFile ? "image loaded" : "idle");
           }}
           type="file"
@@ -527,7 +537,7 @@ export function ImageGenerator() {
                     setError("");
                     setSendError("");
                     setSendHelpUrl("");
-                    setSendStatus("send png");
+                    setSendStatus("send to telegram");
                     setStatus(file ? "style changed" : "idle");
                   }}
                   type="button"
@@ -640,7 +650,7 @@ export function ImageGenerator() {
           onClick={sendImageToTelegram}
           type="button"
         >
-          {sendStatus}
+          {getTelegramSendLabel(sendStatus)}
         </button>
         <button
           className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
@@ -651,6 +661,31 @@ export function ImageGenerator() {
           {copyStatus}
         </button>
       </div>
+
+      {sendStatus === "done" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={() => {
+              setResult(null);
+              setSendStatus("send to telegram");
+              setSendError("");
+              setSendHelpUrl("");
+              setStatus(file ? "style changed" : "idle");
+            }}
+            type="button"
+          >
+            try another style
+          </button>
+          <button
+            className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+            onClick={sendImageToTelegram}
+            type="button"
+          >
+            post again
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
