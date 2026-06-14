@@ -441,10 +441,11 @@ export function TextGenerator() {
       ? renderResult.canvas
       : TEXT_CANVAS_PRESETS[canvasPreset];
   const activeFontProfile = ASCII_FONT_PROFILES[font];
-  const visibleFonts =
-    filteredFonts.length > 0
-      ? Array.from(new Set<AsciiFontName>([font, ...filteredFonts]))
-      : ASCII_FONTS;
+  const visibleFonts = fontQuery.trim()
+    ? ASCII_FONTS.filter(
+        (fontName) => fontName === font || filteredFonts.includes(fontName),
+      )
+    : ASCII_FONTS;
   const fontCountLabel =
     fontQuery.trim() && filteredFonts.length === 0
       ? "0 hits"
@@ -549,7 +550,7 @@ export function TextGenerator() {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {visibleFonts.slice(0, 6).map((fontName) => {
+          {visibleFonts.map((fontName) => {
             const profile = ASCII_FONT_PROFILES[fontName];
             const isActive = fontName === font;
 
