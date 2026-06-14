@@ -35,6 +35,28 @@ type ImageRenderResponse =
       message: string;
     };
 
+type ImageVideoResponse =
+  | {
+      ok: true;
+      asciiText: string;
+      fileName: string;
+      presetId: ImageAsciiPresetId;
+      video: {
+        base64: string;
+        durationSeconds: number;
+        fileName: string;
+        fps: number;
+        height: number;
+        mimeType: "video/mp4";
+        renderedFrames: number;
+        width: number;
+      };
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 type ImageQualityReport = {
   metrics: {
     brightness: number;
@@ -258,6 +280,15 @@ export function ImageGenerator() {
   const [qualityStatus, setQualityStatus] = useState("");
   const [sendError, setSendError] = useState("");
   const [sendHelpUrl, setSendHelpUrl] = useState("");
+  const [videoResult, setVideoResult] = useState<ImageVideoResponse | null>(
+    null,
+  );
+  const [videoStatus, setVideoStatus] = useState("video idle");
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoError, setVideoError] = useState("");
+  const [videoSendStatus, setVideoSendStatus] = useState("send to telegram");
+  const [videoSendError, setVideoSendError] = useState("");
+  const [videoSendHelpUrl, setVideoSendHelpUrl] = useState("");
 
   useEffect(() => {
     if (!fileUrl) return;
@@ -295,11 +326,28 @@ export function ImageGenerator() {
     result?.ok === true
       ? `data:${result.image.mimeType};base64,${result.image.base64}`
       : "";
+  const videoDataUrl =
+    videoResult?.ok === true
+      ? `data:${videoResult.video.mimeType};base64,${videoResult.video.base64}`
+      : "";
   const activePreset = IMAGE_ASCII_PRESETS[presetId];
   const canGenerate = Boolean(file) && status !== "rendering";
+  const isRenderingVideo = videoStatus === "rendering video";
+  const canGenerateVideo = Boolean(file && result?.ok) && !isRenderingVideo;
+  const showVideoProgress = isRenderingVideo || videoProgress > 0;
   const selectedFileMeta = file
     ? `image ready / ${formatMegabytes(file.size)} MB`
     : "drop / select JPG PNG WEBP";
+
+  const resetImageVideo = () => {
+    setVideoResult(null);
+    setVideoStatus("video idle");
+    setVideoProgress(0);
+    setVideoError("");
+    setVideoSendStatus("send to telegram");
+    setVideoSendError("");
+    setVideoSendHelpUrl("");
+  };
 
   const renderImage = async () => {
     if (!file) {
@@ -312,6 +360,7 @@ export function ImageGenerator() {
     setError("");
     setSendError("");
     setSendHelpUrl("");
+    resetImageVideo();
 
     const formData = new FormData();
     formData.set("file", file);
@@ -342,6 +391,67 @@ export function ImageGenerator() {
       });
       setError("Image render failed.");
       setStatus("error");
+    }
+  };
+
+  const renderImageVideo = async () => {
+    if (!file || !result?.ok) {
+      setVideoError("Generate an ASCII image first.");
+      return;
+    }
+
+    setVideoStatus("rendering video");
+    setVideoProgress(5);
+    setVideoResult(null);
+    setVideoError("");
+    setVideoSendStatus("send to telegram");
+    setVideoSendError("");
+    setVideoSendHelpUrl("");
+
+    const progressTimer = window.setInterval(() => {
+      setVideoProgress((currentProgress) => {
+        if (currentProgress >= 94) return currentProgress;
+
+        const nextProgress =
+          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.08));
+
+        return Math.min(94, nextProgress);
+      });
+    }, 280);
+
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("presetId", presetId);
+
+    try {
+      const response = await fetch("/api/image/video", {
+        body: formData,
+        method: "POST",
+      });
+      const payload = (await response.json()) as ImageVideoResponse;
+
+      if (!response.ok || !payload.ok) {
+        const message = payload.ok ? "Glitch video render failed." : payload.message;
+        setVideoResult(payload);
+        setVideoError(message);
+        setVideoStatus("video error");
+        setVideoProgress(0);
+        return;
+      }
+
+      setVideoResult(payload);
+      setVideoStatus("mp4 ready");
+      setVideoProgress(100);
+    } catch {
+      setVideoResult({
+        ok: false,
+        message: "Glitch video render failed.",
+      });
+      setVideoError("Glitch video render failed.");
+      setVideoStatus("video error");
+      setVideoProgress(0);
+    } finally {
+      window.clearInterval(progressTimer);
     }
   };
 
@@ -415,6 +525,76 @@ export function ImageGenerator() {
     }
   };
 
+  const sendImageVideoToTelegram = async () => {
+    if (!videoResult?.ok) return;
+
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      setVideoSendStatus("start bot");
+      setVideoSendHelpUrl(getBotStartUrl());
+      setVideoSendError(
+        "Open ASCIILOGRAPH from Telegram and press SEND TO TELEGRAM again.",
+      );
+      return;
+    }
+
+    try {
+      setVideoSendStatus("sending");
+      setVideoSendError("");
+      setVideoSendHelpUrl("");
+
+      const response = await fetch("/api/telegram/send-result", {
+        body: JSON.stringify({
+          caption: "ASCII image glitch video",
+          fileName: videoResult.video.fileName,
+          initData,
+          mimeType: videoResult.video.mimeType,
+          resultType: "videoMp4",
+          videoBase64: videoResult.video.base64,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json()) as TelegramSendResponse;
+
+      if (!response.ok || payload.ok === false) {
+        const failedPayload: Extract<TelegramSendResponse, { ok: false }> =
+          payload.ok === false
+            ? payload
+            : {
+                message: "Could not send MP4.",
+                ok: false,
+              };
+
+        setVideoSendStatus(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? "start bot"
+            : "send to telegram",
+        );
+        setVideoSendHelpUrl(
+          failedPayload.code === "BOT_CHAT_NOT_STARTED"
+            ? failedPayload.startUrl || getBotStartUrl()
+            : "",
+        );
+        setVideoSendError(
+          getTelegramSendErrorCopy(failedPayload, "Could not send MP4."),
+        );
+        return;
+      }
+
+      setVideoSendStatus("done");
+    } catch (error) {
+      setVideoSendStatus("send to telegram");
+      setVideoSendHelpUrl("");
+      setVideoSendError(
+        error instanceof Error ? error.message : "Could not send MP4.",
+      );
+    }
+  };
+
   const copyAscii = async () => {
     if (!result?.ok) return;
 
@@ -442,6 +622,7 @@ export function ImageGenerator() {
               setSendError("");
               setSendHelpUrl("");
               setSendStatus("send to telegram");
+              resetImageVideo();
               setStatus(file ? "style changed" : "idle");
             }}
           >
@@ -466,6 +647,7 @@ export function ImageGenerator() {
               setSendError("");
               setSendHelpUrl("");
               setSendStatus("send to telegram");
+              resetImageVideo();
               setStatus("too large");
               setError(`Image must be ${imageMaxMegabytes} MB or smaller.`);
               event.target.value = "";
@@ -481,6 +663,7 @@ export function ImageGenerator() {
             setSendError("");
             setSendHelpUrl("");
             setSendStatus("send to telegram");
+            resetImageVideo();
             setStatus(nextFile ? "image loaded" : "idle");
           }}
           type="file"
@@ -538,6 +721,7 @@ export function ImageGenerator() {
                     setSendError("");
                     setSendHelpUrl("");
                     setSendStatus("send to telegram");
+                    resetImageVideo();
                     setStatus(file ? "style changed" : "idle");
                   }}
                   type="button"
@@ -671,6 +855,7 @@ export function ImageGenerator() {
               setSendStatus("send to telegram");
               setSendError("");
               setSendHelpUrl("");
+              resetImageVideo();
               setStatus(file ? "style changed" : "idle");
             }}
             type="button"
@@ -684,6 +869,118 @@ export function ImageGenerator() {
           >
             post again
           </button>
+        </div>
+      ) : null}
+
+      {result?.ok ? (
+        <div className="space-y-3 border border-ascii-green/25 bg-black p-3">
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+            <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-ascii-green">
+              glitch video
+            </span>
+            <span className="text-[0.58rem] uppercase tracking-[0.12em] text-ascii-white/45">
+              4 sec / 10 fps
+            </span>
+          </div>
+
+          <div className="flex aspect-video items-center justify-center overflow-hidden border border-ascii-green/20 bg-black">
+            {videoDataUrl ? (
+              <video
+                className="h-full w-full object-contain"
+                controls
+                loop
+                muted
+                playsInline
+                src={videoDataUrl}
+              />
+            ) : (
+              <span className="px-3 text-center text-[0.65rem] uppercase leading-5 tracking-[0.14em] text-ascii-white/35">
+                same ascii render / glyph drift / scanline glitch
+              </span>
+            )}
+          </div>
+
+          {showVideoProgress ? (
+            <div className="text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/58">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span>{isRenderingVideo ? "rendering mp4" : "mp4 ready"}</span>
+                <span className="text-ascii-green">{videoProgress}%</span>
+              </div>
+              <div className="h-2 border border-ascii-green/30 bg-black">
+                <div
+                  className="h-full bg-ascii-green shadow-[0_0_16px_rgba(0,255,102,0.35)] transition-[width] duration-300"
+                  style={{ width: `${videoProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {videoResult?.ok ? (
+            <div className="border border-ascii-green/20 px-3 py-2 text-[0.62rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/52">
+              {videoResult.video.renderedFrames} frames /{" "}
+              {videoResult.video.width}x{videoResult.video.height} /{" "}
+              {videoResult.video.durationSeconds.toFixed(1)} sec
+            </div>
+          ) : null}
+
+          {videoError ? (
+            <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+              {videoError}
+            </div>
+          ) : null}
+
+          {videoSendError ? (
+            <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+              {videoSendError}
+              {videoSendHelpUrl ? (
+                <button
+                  className="mt-2 block min-h-9 w-full border border-red-300/70 bg-black px-3 text-xs font-black uppercase tracking-[0.12em] text-red-200 transition hover:bg-red-300 hover:text-black"
+                  onClick={() => openBotStartUrl(videoSendHelpUrl)}
+                  type="button"
+                >
+                  start bot
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className="min-h-10 border border-ascii-green bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+              disabled={!canGenerateVideo}
+              onClick={renderImageVideo}
+              type="button"
+            >
+              {isRenderingVideo ? `${videoProgress}%` : "make glitch video"}
+            </button>
+            <button
+              className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+              disabled={!videoDataUrl || videoSendStatus === "sending"}
+              onClick={sendImageVideoToTelegram}
+              type="button"
+            >
+              {getTelegramSendLabel(videoSendStatus)}
+            </button>
+          </div>
+
+          {videoSendStatus === "done" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+                onClick={resetImageVideo}
+                type="button"
+              >
+                try another style
+              </button>
+              <button
+                className="min-h-10 border border-ascii-green/35 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
+                onClick={sendImageVideoToTelegram}
+                type="button"
+              >
+                post again
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

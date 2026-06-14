@@ -12,7 +12,7 @@ import {
   type ImageAsciiPresetId,
 } from "@/lib/ascii/image";
 
-type Rgb = {
+export type Rgb = {
   b: number;
   g: number;
   r: number;
@@ -30,6 +30,19 @@ export type RenderedAsciiImage = {
   mimeType: "image/png";
   png: Buffer;
   presetId: ImageAsciiPresetId;
+  width: number;
+};
+
+export type PreparedAsciiImageFrame = {
+  asciiText: string;
+  colors?: Array<Array<Rgb | undefined>>;
+  lines: string[];
+  presetId: ImageAsciiPresetId;
+};
+
+export type RenderedAsciiImageSvg = {
+  height: number;
+  svg: string;
   width: number;
 };
 
@@ -483,6 +496,7 @@ function ditherToChars(
 function renderBrailleSvg(options: {
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
+  overlay?: string;
   preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
 }) {
   const maxColumns = Math.max(...options.lines.map((line) => line.length), 1);
@@ -549,6 +563,7 @@ function renderBrailleSvg(options: {
   <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.55"/>
   <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="rgba(0,255,102,0.25)" stroke-width="1"/>
   <g filter="url(#softGlow)" fill="${foreground}">${shapes.join("\n    ")}</g>
+  ${options.overlay ?? ""}
 </svg>`,
     width,
   };
@@ -557,6 +572,7 @@ function renderBrailleSvg(options: {
 function renderAsciiSvg(options: {
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
+  overlay?: string;
   preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
 }) {
   if (options.preset.mode === "blocks-braille") {
@@ -616,15 +632,16 @@ function renderAsciiSvg(options: {
   <g filter="url(#softGlow)" fill="${foreground}" stroke="${foreground}" stroke-linecap="round" stroke-linejoin="round">
     ${shapes.join("\n    ")}
   </g>
+  ${options.overlay ?? ""}
 </svg>`,
     width,
   };
 }
 
-export async function renderImageToAsciiPng(
+export async function prepareImageAsciiFrame(
   input: Buffer,
   options: RenderImageAsciiOptions = {},
-): Promise<RenderedAsciiImage> {
+): Promise<PreparedAsciiImageFrame> {
   if (input.byteLength > IMAGE_LIMITS.maxFileBytes) {
     throw new Error("Image file is too large. Maximum size is 12 MB.");
   }
@@ -665,15 +682,42 @@ export async function renderImageToAsciiPng(
     lines = ditherToChars(lumas, pixels.width, pixels.height, preset, invert);
   }
 
-  const svg = renderAsciiSvg({ colors, lines, preset });
+  return {
+    asciiText: lines.join("\n"),
+    colors,
+    lines,
+    presetId,
+  };
+}
+
+export function renderAsciiFrameToSvg(
+  frame: PreparedAsciiImageFrame,
+  options: { overlay?: string } = {},
+): RenderedAsciiImageSvg {
+  const preset = IMAGE_ASCII_PRESETS[frame.presetId];
+
+  return renderAsciiSvg({
+    colors: frame.colors,
+    lines: frame.lines,
+    overlay: options.overlay,
+    preset,
+  });
+}
+
+export async function renderImageToAsciiPng(
+  input: Buffer,
+  options: RenderImageAsciiOptions = {},
+): Promise<RenderedAsciiImage> {
+  const frame = await prepareImageAsciiFrame(input, options);
+  const svg = renderAsciiFrameToSvg(frame);
   const png = await sharp(Buffer.from(svg.svg)).png().toBuffer();
 
   return {
-    asciiText: lines.join("\n"),
+    asciiText: frame.asciiText,
     height: svg.height,
     mimeType: "image/png",
     png,
-    presetId,
+    presetId: frame.presetId,
     width: svg.width,
   };
 }
