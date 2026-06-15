@@ -103,9 +103,9 @@ export function MiniAppHome() {
     <main className="relative min-h-dvh overflow-hidden bg-transparent text-ascii-white">
       <section className="relative z-10 mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <header className="bg-black/45 p-3 shadow-[0_0_18px_rgba(0,255,102,0.06)] backdrop-blur-[1px]">
-          <div className="flex items-center gap-2 min-[390px]:gap-3">
+          <div className="grid gap-3">
             <AsciilographMark />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 text-center">
               <GlitchBrand />
               <p className="mt-2 text-[0.54rem] uppercase text-ascii-white/62 min-[390px]:text-[0.62rem]">
                 text / image / video ascii converter
