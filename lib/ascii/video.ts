@@ -3,8 +3,8 @@ export const VIDEO_RENDER_LIMITS = {
   maxDurationSeconds: 15,
   maxOutputWidth: 480,
   maxOutputBytes: 50 * 1024 * 1024,
-  defaultFps: 8,
-  defaultWidth: 360,
+  defaultFps: 10,
+  defaultWidth: 240,
   fpsOptions: [6, 8, 10, 12],
   widthOptions: [240, 360, 480],
   stripAudio: true,
@@ -42,6 +42,23 @@ export const VIDEO_ASCII_CONTAINER = {
 } as const;
 
 export const VIDEO_ASCII_PRESETS = {
+  matrixPulse: {
+    label: "Matrix pulse",
+    shortLabel: "MATRIX",
+    mode: "matrix-green-animation",
+    width: 240,
+    fps: 10,
+    characterSet: "terminal",
+    contrast: 1.22,
+    density: 1.04,
+    glow: false,
+    dither: "none",
+    notes: [
+      "green terminal output",
+      "fast preview preset",
+      "keeps Telegram file size low",
+    ],
+  },
   telegramLoop: {
     label: "Telegram loop",
     shortLabel: "LOOP",
@@ -57,23 +74,6 @@ export const VIDEO_ASCII_PRESETS = {
       "silent H.264 MP4",
       "small frame budget",
       "sendAnimation first",
-    ],
-  },
-  brailleMotion: {
-    label: "Braille motion",
-    shortLabel: "BRAILLE",
-    mode: "bitmap-animation",
-    width: 360,
-    fps: 8,
-    characterSet: "fine",
-    contrast: 1.1,
-    density: 0.88,
-    glow: false,
-    dither: "threshold",
-    notes: [
-      "2x4 cell look for detail",
-      "lower shimmer than dense ASCII",
-      "good for faces and objects",
     ],
   },
   bayerMotion: {
@@ -93,21 +93,21 @@ export const VIDEO_ASCII_PRESETS = {
       "best candidate for MVP video",
     ],
   },
-  matrixPulse: {
-    label: "Matrix pulse",
-    shortLabel: "MATRIX",
-    mode: "matrix-green-animation",
-    width: 240,
-    fps: 10,
-    characterSet: "terminal",
-    contrast: 1.22,
-    density: 1.04,
+  brailleMotion: {
+    label: "Braille motion",
+    shortLabel: "BRAILLE",
+    mode: "bitmap-animation",
+    width: 360,
+    fps: 8,
+    characterSet: "fine",
+    contrast: 1.1,
+    density: 0.88,
     glow: false,
-    dither: "none",
+    dither: "threshold",
     notes: [
-      "green terminal output",
-      "fast preview preset",
-      "keeps Telegram file size low",
+      "2x4 cell look for detail",
+      "lower shimmer than dense ASCII",
+      "good for faces and objects",
     ],
   },
 } as const satisfies Record<
@@ -144,7 +144,7 @@ export function buildVideoJobPlan(options: {
   const presetId = options.presetId ?? "";
   const preset = isVideoAsciiPresetId(presetId)
     ? VIDEO_ASCII_PRESETS[presetId]
-    : VIDEO_ASCII_PRESETS.telegramLoop;
+    : VIDEO_ASCII_PRESETS.matrixPulse;
   const fps = VIDEO_RENDER_LIMITS.fpsOptions.includes(
     options.fps as (typeof VIDEO_RENDER_LIMITS.fpsOptions)[number],
   )

@@ -67,8 +67,8 @@ type Scene = {
 };
 
 const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
-  cloudCount: 7,
-  particlesPerCloud: 96,
+  cloudCount: 10,
+  particlesPerCloud: 78,
   speed: 0.3,
   turbulence: 0.96,
   cohesionStrength: 0.0068,
@@ -95,8 +95,8 @@ const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
 
 const MOBILE_CONFIG: AsciiCloudBackgroundConfig = {
   ...DESKTOP_CONFIG,
-  cloudCount: 5,
-  particlesPerCloud: 54,
+  cloudCount: 7,
+  particlesPerCloud: 42,
   speed: 0.24,
   flowStrength: 0.056,
   trailAmount: 0.2,
@@ -106,8 +106,8 @@ const MOBILE_CONFIG: AsciiCloudBackgroundConfig = {
 
 const REDUCED_MOTION_CONFIG: AsciiCloudBackgroundConfig = {
   ...MOBILE_CONFIG,
-  cloudCount: 3,
-  particlesPerCloud: 34,
+  cloudCount: 4,
+  particlesPerCloud: 28,
   speed: 0.05,
   turbulence: 0.18,
   flowStrength: 0.012,

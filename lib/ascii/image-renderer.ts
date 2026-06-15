@@ -649,7 +649,7 @@ export async function prepareImageAsciiFrame(
   const requestedPresetId = options.presetId ?? "";
   const presetId: ImageAsciiPresetId = isImageAsciiPresetId(requestedPresetId)
     ? requestedPresetId
-    : "brailleColor";
+    : "matrixAscii";
   const preset = IMAGE_ASCII_PRESETS[presetId];
   const requestedWidth = Math.max(
     24,

@@ -87,7 +87,7 @@ export function AsciilographMark() {
   return (
     <div
       aria-hidden="true"
-      className="asciilograph-mark shrink-0 border border-ascii-green/30 bg-black px-1.5 py-2 shadow-[0_0_14px_rgba(0,255,102,0.1)] min-[390px]:px-2"
+      className="asciilograph-mark shrink-0 bg-black/25 px-1.5 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)] min-[390px]:px-2"
     >
       <pre className="m-0 text-[0.44rem] font-black leading-[0.84] tracking-[-0.06em] min-[370px]:text-[0.49rem] min-[420px]:text-[0.54rem] sm:text-[0.62rem]">
         {rows.map((row, rowIndex) => (

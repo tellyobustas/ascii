@@ -49,7 +49,7 @@ function formatMegabytes(bytes: number) {
 
 function getTelegramSendLabel(sendStatus: string) {
   if (sendStatus === "sending") return "sending";
-  if (sendStatus === "done") return "sent";
+  if (sendStatus === "done") return "done";
   if (sendStatus === "start bot") return "start bot";
 
   return "send to telegram";
@@ -58,7 +58,7 @@ function getTelegramSendLabel(sendStatus: string) {
 export function VideoGenerator() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState("");
-  const [presetId, setPresetId] = useState<VideoAsciiPresetId>("telegramLoop");
+  const [presetId, setPresetId] = useState<VideoAsciiPresetId>("matrixPulse");
   const [fps, setFps] = useState<(typeof VIDEO_RENDER_LIMITS.fpsOptions)[number]>(
     VIDEO_RENDER_LIMITS.defaultFps,
   );
@@ -109,11 +109,11 @@ export function VideoGenerator() {
         if (currentProgress >= 94) return currentProgress;
 
         const nextProgress =
-          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.07));
+          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.045));
 
         return Math.min(94, nextProgress);
       });
-    }, 320);
+    }, 420);
 
     const formData = new FormData();
     formData.set("file", file);
@@ -335,7 +335,7 @@ export function VideoGenerator() {
       </label>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="border border-ascii-green/25 bg-black p-2">
+        <div className="bg-black/45 p-2">
           <div className="mb-2 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
             original
           </div>
@@ -356,7 +356,7 @@ export function VideoGenerator() {
           </div>
         </div>
 
-        <div className="border border-ascii-green/25 bg-black p-2">
+        <div className="bg-black/45 p-2">
           <div className="mb-2 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
             ascii mp4
           </div>
@@ -388,7 +388,7 @@ export function VideoGenerator() {
       </div>
 
       {showRenderProgress ? (
-        <div className="border border-ascii-green/25 bg-black px-3 py-3 text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/58">
+        <div className="bg-black/45 px-3 py-3 text-[0.65rem] uppercase tracking-[0.12em] text-ascii-white/58">
           <div className="mb-2 flex items-center justify-between gap-3">
             <span>{isRenderingVideo ? "rendering mp4" : "render ready"}</span>
             <span className="text-ascii-green">{renderProgress}%</span>
@@ -403,7 +403,7 @@ export function VideoGenerator() {
       ) : null}
 
       {result?.ok ? (
-        <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/55">
+        <div className="bg-black/45 px-3 py-2 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/55">
           {result.video.renderedFrames} frames /{" "}
           {result.video.durationSeconds.toFixed(2)} sec
           {result.video.wasTrimmed ? (

@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const rendered = await renderVideoToAsciiMp4(buffer, {
       fps: Number(formData.get("fps") ?? 0) || undefined,
-      presetId: String(formData.get("presetId") ?? "telegramLoop"),
+      presetId: String(formData.get("presetId") ?? "matrixPulse"),
       width: Number(formData.get("width") ?? 0) || undefined,
     });
 

@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const rendered = await renderImageToAsciiPng(buffer, {
       invert: formData.get("invert") === "true",
-      presetId: String(formData.get("presetId") ?? "brailleColor"),
+      presetId: String(formData.get("presetId") ?? "matrixAscii"),
       width: Number(formData.get("width") ?? 0) || undefined,
     });
 

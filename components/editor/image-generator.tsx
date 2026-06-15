@@ -84,7 +84,7 @@ function formatMegabytes(bytes: number) {
 
 function getTelegramSendLabel(sendStatus: string) {
   if (sendStatus === "sending") return "sending";
-  if (sendStatus === "done") return "sent";
+  if (sendStatus === "done") return "done";
   if (sendStatus === "start bot") return "start bot";
 
   return "send to telegram";
@@ -269,7 +269,7 @@ async function analyzeImageQuality(
 export function ImageGenerator() {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState("");
-  const [presetId, setPresetId] = useState<ImageAsciiPresetId>("brailleColor");
+  const [presetId, setPresetId] = useState<ImageAsciiPresetId>("matrixAscii");
   const [result, setResult] = useState<ImageRenderResponse | null>(null);
   const [status, setStatus] = useState("idle");
   const [sendStatus, setSendStatus] = useState("send to telegram");
@@ -413,11 +413,11 @@ export function ImageGenerator() {
         if (currentProgress >= 94) return currentProgress;
 
         const nextProgress =
-          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.08));
+          currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.045));
 
         return Math.min(94, nextProgress);
       });
-    }, 280);
+    }, 420);
 
     const formData = new FormData();
     formData.set("file", file);
@@ -671,14 +671,14 @@ export function ImageGenerator() {
         <span className="space-y-2">
           <span className="block text-ascii-green">{selectedFileMeta}</span>
           <span className="block text-[0.62rem] leading-5 tracking-[0.14em] text-ascii-white/45">
-            jpg png webp / max {imageMaxMegabytes} mb / max{" "}
+            max {imageMaxMegabytes} mb / max{" "}
             {IMAGE_LIMITS.maxInputWidth}x{IMAGE_LIMITS.maxInputHeight}px
           </span>
         </span>
       </label>
 
       {qualityStatus ? (
-        <div className="border border-ascii-green/25 bg-black px-3 py-3 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/58">
+        <div className="bg-black/45 px-3 py-3 text-[0.65rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/58">
           {qualityReport ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -701,7 +701,7 @@ export function ImageGenerator() {
                   {qualityReport.tone}
                 </span>
               </div>
-              <div className="border border-ascii-green/20 px-2 py-2 text-ascii-white/68">
+              <div className="bg-black/35 px-2 py-2 text-ascii-white/68">
                 best:{" "}
                 <span className="text-ascii-green">
                   {
@@ -754,7 +754,7 @@ export function ImageGenerator() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="border border-ascii-green/25 bg-black p-2">
+        <div className="bg-black/45 p-2">
           <div className="mb-2 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
             original
           </div>
@@ -774,7 +774,7 @@ export function ImageGenerator() {
           </div>
         </div>
 
-        <div className="border border-ascii-green/25 bg-black p-2">
+        <div className="bg-black/45 p-2">
           <div className="mb-2 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
             ascii png
           </div>
@@ -873,7 +873,7 @@ export function ImageGenerator() {
       ) : null}
 
       {result?.ok ? (
-        <div className="space-y-3 border border-ascii-green/25 bg-black p-3">
+        <div className="space-y-3 bg-black/45 p-3">
           <div className="grid grid-cols-[1fr_auto] items-center gap-3">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-ascii-green">
               glitch video
@@ -883,7 +883,7 @@ export function ImageGenerator() {
             </span>
           </div>
 
-          <div className="flex aspect-video items-center justify-center overflow-hidden border border-ascii-green/20 bg-black">
+          <div className="flex aspect-video items-center justify-center overflow-hidden bg-black">
             {videoDataUrl ? (
               <video
                 className="h-full w-full object-contain"
@@ -916,7 +916,7 @@ export function ImageGenerator() {
           ) : null}
 
           {videoResult?.ok ? (
-            <div className="border border-ascii-green/20 px-3 py-2 text-[0.62rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/52">
+            <div className="bg-black/35 px-3 py-2 text-[0.62rem] uppercase leading-5 tracking-[0.1em] text-ascii-white/52">
               {videoResult.video.renderedFrames} frames /{" "}
               {videoResult.video.width}x{videoResult.video.height} /{" "}
               {videoResult.video.durationSeconds.toFixed(1)} sec

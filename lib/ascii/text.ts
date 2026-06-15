@@ -9,7 +9,6 @@ export const ASCII_FONTS = [
   "Doom",
   "Block",
   "Bubble",
-  "Digital",
   "Mini",
   "Banner",
 ] as const;
@@ -64,11 +63,6 @@ export const ASCII_FONT_PROFILES: Record<
     sample: "(ASCII)",
     searchTags: ["bubble", "round", "soft", "fun"],
   },
-  Digital: {
-    mood: "retro clock display",
-    sample: "01:10",
-    searchTags: ["digital", "clock", "lcd", "numeric"],
-  },
   Mini: {
     mood: "tiny utility text",
     sample: "mini",
@@ -88,7 +82,7 @@ export const TEXT_FONT_GROUPS = [
   },
   {
     label: "terminal",
-    fonts: ["Standard", "Slant", "Digital", "Mini"],
+    fonts: ["Standard", "Slant", "Mini"],
   },
   {
     label: "expressive",

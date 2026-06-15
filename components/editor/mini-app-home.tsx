@@ -102,18 +102,13 @@ export function MiniAppHome() {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-transparent text-ascii-white">
       <section className="relative z-10 mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <header className="border border-ascii-green/30 bg-black/70 p-3 shadow-[0_0_18px_rgba(0,255,102,0.06)] backdrop-blur-[1px]">
-          <div className="flex items-center justify-between gap-3 text-[0.58rem] uppercase text-ascii-white/50">
-            <span>mini app</span>
-            <span>online</span>
-          </div>
-
-          <div className="flex items-center gap-2 pt-3 min-[390px]:gap-3">
+        <header className="bg-black/45 p-3 shadow-[0_0_18px_rgba(0,255,102,0.06)] backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 min-[390px]:gap-3">
             <AsciilographMark />
             <div className="min-w-0 flex-1">
               <GlitchBrand />
               <p className="mt-2 text-[0.54rem] uppercase text-ascii-white/62 min-[390px]:text-[0.62rem]">
-                text / image / video converter
+                text / image / video ascii converter
               </p>
             </div>
           </div>
@@ -145,8 +140,8 @@ export function MiniAppHome() {
           })}
         </nav>
 
-        <section className="terminal-scanlines mt-3 border border-ascii-green/30 bg-black/74 p-3 backdrop-blur-[1px]">
-          <div className="flex items-center justify-between gap-3 border-b border-ascii-green/18 pb-2">
+        <section className="terminal-scanlines mt-3 bg-black/58 p-3 backdrop-blur-[1px]">
+          <div className="flex items-center justify-between gap-3 pb-2">
             <h2 className="text-sm font-black uppercase text-ascii-white/78">
               {activeTab} GENERATOR
             </h2>
@@ -161,7 +156,7 @@ export function MiniAppHome() {
         </section>
 
         <footer className="mt-auto pt-4 text-center text-[0.62rem] uppercase tracking-[0.18em] text-ascii-white/38">
-          ascii terminal lab / tg mini app
+          ASCIILOGRAPH / MADE BY GESSWRLDWIDE
         </footer>
       </section>
     </main>

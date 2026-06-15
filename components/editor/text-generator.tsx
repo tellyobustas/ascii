@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ASCII_FONT_PROFILES,
   ASCII_FONTS,
   TEXT_CANVAS_PRESETS,
-  TEXT_FONT_GROUPS,
   TEXT_VIDEO_COLORS,
   type AsciiFontName,
   type TextCanvasPresetId,
@@ -78,7 +77,7 @@ const textVideoColorEntries = Object.entries(TEXT_VIDEO_COLORS) as Array<
 
 function getTelegramSendLabel(sendStatus: string) {
   if (sendStatus === "sending") return "sending";
-  if (sendStatus === "done") return "sent";
+  if (sendStatus === "done") return "done";
   if (sendStatus === "start bot") return "start bot";
 
   return "send to telegram";
@@ -87,7 +86,6 @@ function getTelegramSendLabel(sendStatus: string) {
 export function TextGenerator() {
   const [text, setText] = useState("Send Nudes");
   const [font, setFont] = useState<AsciiFontName>("Graffiti");
-  const [fontQuery, setFontQuery] = useState("");
   const [canvasPreset, setCanvasPreset] =
     useState<TextCanvasPresetId>("telegramPost");
   const [videoColor, setVideoColor] = useState<TextVideoColorId>("green");
@@ -95,13 +93,12 @@ export function TextGenerator() {
     null,
   );
   const [videoResult, setVideoResult] = useState<TextVideoResponse | null>(null);
-  const [status, setStatus] = useState("rendering");
+  const [, setStatus] = useState("rendering");
   const [videoStatus, setVideoStatus] = useState("ready for mp4");
   const [sendStatus, setSendStatus] = useState("send to telegram");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendHelpUrl, setSendHelpUrl] = useState("");
   const [textPostStatus, setTextPostStatus] = useState("publish text");
-  const [copyTextStatus, setCopyTextStatus] = useState("copy tg code");
   const [textPostError, setTextPostError] = useState("");
   const [videoProgress, setVideoProgress] = useState(0);
   const [previewWidth, setPreviewWidth] = useState(0);
@@ -168,26 +165,6 @@ export function TextGenerator() {
     };
   }, [canvasPreset, font, text]);
 
-  const filteredFonts = useMemo(() => {
-    const query = fontQuery.trim().toLowerCase();
-
-    if (!query) return ASCII_FONTS;
-
-    return ASCII_FONTS.filter((fontName) => {
-      const profile = ASCII_FONT_PROFILES[fontName];
-      const searchBlob = [
-        fontName,
-        profile.mood,
-        profile.sample,
-        ...profile.searchTags,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return searchBlob.includes(query);
-    });
-  }, [fontQuery]);
-
   const resetTextVideo = () => {
     setVideoResult(null);
     setVideoStatus("ready for mp4");
@@ -195,25 +172,8 @@ export function TextGenerator() {
     setSendError(null);
     setSendHelpUrl("");
     setTextPostStatus("publish text");
-    setCopyTextStatus("copy tg code");
     setTextPostError("");
     setVideoProgress(0);
-  };
-
-  const copyTelegramCodeBlock = async () => {
-    if (!renderResult?.ok) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        "```\n" + renderResult.fit.fittedLines.join("\n") + "\n```",
-      );
-      setCopyTextStatus("copied");
-      setTextPostError("");
-    } catch {
-      setCopyTextStatus("copy failed");
-    }
-
-    window.setTimeout(() => setCopyTextStatus("copy tg code"), 1400);
   };
 
   const openInlineFallback = () => {
@@ -316,11 +276,11 @@ export function TextGenerator() {
           if (currentProgress >= 94) return currentProgress;
 
           const nextProgress =
-            currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.08));
+            currentProgress + Math.max(1, Math.round((96 - currentProgress) * 0.045));
 
           return Math.min(94, nextProgress);
         });
-      }, 260);
+      }, 420);
 
       const response = await fetch("/api/text/video", {
         body: JSON.stringify({
@@ -441,15 +401,6 @@ export function TextGenerator() {
       ? renderResult.canvas
       : TEXT_CANVAS_PRESETS[canvasPreset];
   const activeFontProfile = ASCII_FONT_PROFILES[font];
-  const visibleFonts = fontQuery.trim()
-    ? ASCII_FONTS.filter(
-        (fontName) => fontName === font || filteredFonts.includes(fontName),
-      )
-    : ASCII_FONTS;
-  const fontCountLabel =
-    fontQuery.trim() && filteredFonts.length === 0
-      ? "0 hits"
-      : String(filteredFonts.length || ASCII_FONTS.length) + " faces";
   const scale = previewWidth > 0 ? previewWidth / activeCanvas.width : 0;
   const activeVideoColor = TEXT_VIDEO_COLORS[videoColor];
   const isVideoRendering = videoStatus === "rendering mp4";
@@ -474,28 +425,7 @@ export function TextGenerator() {
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block">
-          <span className="mb-2 block text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
-            font select
-          </span>
-          <select
-            className="min-h-11 w-full border border-ascii-green/35 bg-black px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-ascii-green focus:border-ascii-green focus:ring-0"
-            onChange={(event) => {
-              setStatus("rendering");
-              resetTextVideo();
-              setFont(event.target.value as AsciiFontName);
-            }}
-            value={font}
-          >
-            {visibleFonts.map((fontName) => (
-              <option key={fontName} value={fontName}>
-                {fontName}
-              </option>
-            ))}
-          </select>
-        </label>
-
+      <div className="grid gap-2">
         <label className="block">
           <span className="mb-2 block text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
             canvas ratio
@@ -519,38 +449,8 @@ export function TextGenerator() {
       </div>
 
       <div className="grid gap-2">
-        <label className="block">
-          <span className="mb-2 block text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
-            font grep
-          </span>
-          <input
-            className="min-h-10 w-full border border-ascii-green/25 bg-black px-3 text-xs uppercase tracking-[0.1em] text-ascii-white placeholder:text-ascii-green/28 focus:border-ascii-green focus:ring-0"
-            onChange={(event) => setFontQuery(event.target.value)}
-            placeholder="poster / terminal / graffiti"
-            spellCheck={false}
-            value={fontQuery}
-          />
-        </label>
-
-        <div className="flex flex-wrap gap-1.5">
-          {TEXT_FONT_GROUPS.map((group) => (
-            <button
-              className="border border-ascii-green/25 bg-black px-2 py-1 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-ascii-green/70 transition hover:border-ascii-green hover:text-ascii-green"
-              key={group.label}
-              onClick={() => {
-                setStatus("rendering");
-                resetTextVideo();
-                setFont(group.fonts[0]);
-              }}
-              type="button"
-            >
-              {group.label}
-            </button>
-          ))}
-        </div>
-
         <div className="grid grid-cols-2 gap-2">
-          {visibleFonts.map((fontName) => {
+          {ASCII_FONTS.map((fontName) => {
             const profile = ASCII_FONT_PROFILES[fontName];
             const isActive = fontName === font;
 
@@ -586,13 +486,13 @@ export function TextGenerator() {
           })}
         </div>
 
-        <div className="border border-ascii-green/25 bg-black px-3 py-2">
+        <div className="bg-black/45 px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-ascii-green">
               {font}
             </span>
             <span className="text-[0.58rem] uppercase tracking-[0.12em] text-ascii-white/45">
-              {fontCountLabel}
+              {ASCII_FONTS.length} faces
             </span>
           </div>
           <p className="mt-1 text-[0.68rem] leading-4 text-ascii-white/55">
@@ -601,7 +501,7 @@ export function TextGenerator() {
         </div>
       </div>
 
-      <div className="border border-ascii-green/25 bg-black p-3">
+      <div className="bg-black/45 p-3">
         <div className="mb-2 text-[0.65rem] uppercase tracking-[0.16em] text-ascii-white/55">
           text video color
         </div>
@@ -635,7 +535,7 @@ export function TextGenerator() {
       </div>
 
       <div
-        className="relative overflow-hidden border border-ascii-green/40 bg-black shadow-[inset_0_0_0_1px_rgba(0,255,102,0.08)]"
+        className="relative overflow-hidden bg-black/65 shadow-[inset_0_0_0_1px_rgba(0,255,102,0.08)]"
         ref={previewRef}
         style={{
           aspectRatio: activeCanvas.width + " / " + activeCanvas.height,
@@ -670,7 +570,7 @@ export function TextGenerator() {
 
       {videoResult?.ok ? (
         <video
-          className="w-full border border-ascii-green/30 bg-black"
+          className="w-full bg-black"
           controls
           loop
           muted
@@ -706,15 +606,7 @@ export function TextGenerator() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
-          disabled={!renderResult?.ok}
-          onClick={copyTelegramCodeBlock}
-          type="button"
-        >
-          {copyTextStatus}
-        </button>
+      <div className="grid gap-2">
         <button
           className="min-h-10 border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
           disabled={!renderResult?.ok}
@@ -726,10 +618,8 @@ export function TextGenerator() {
       </div>
 
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-        <div className="border border-ascii-green/25 bg-black px-3 py-2 text-[0.65rem] uppercase tracking-[0.14em] text-ascii-green/70">
-          {isVideoRendering
-            ? videoStatus + " " + videoProgress + "%"
-            : status + " / " + videoStatus + " / " + sendStatus}
+        <div className="bg-black/45 px-3 py-2 text-[0.65rem] uppercase tracking-[0.14em] text-ascii-green/70">
+          live preview
         </div>
         <button
           className="relative min-h-10 overflow-hidden border border-ascii-green bg-black px-4 text-xs font-black uppercase tracking-[0.12em] text-ascii-green transition hover:bg-ascii-green hover:text-black disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"

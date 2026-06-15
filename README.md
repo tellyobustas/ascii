@@ -82,7 +82,7 @@ Bot worker:
 3. Inline-кнопка OPEN ASCII через web_app.
 4. Главный экран Mini App в terminal UI.
 5. Живой процедурный ASCII background.
-6. TEXT generator: figlet font select, font search, canvas ratio, live fit preview, copy ASCII.
+6. TEXT generator: figlet font cards, canvas ratio, live fit preview, Telegram text publish, MP4 export.
 7. IMAGE generator: upload JPG/PNG/WebP, mode buttons, Sharp render, preview, download PNG, copy ASCII.
 8. VIDEO generator: upload MP4/MOV/WebM, mode buttons, fps/width controls, FFmpeg render, preview, download MP4.
 

@@ -3,7 +3,6 @@ import bannerFont from "figlet/fonts/Banner";
 import bigFont from "figlet/fonts/Big";
 import blockFont from "figlet/fonts/Block";
 import bubbleFont from "figlet/fonts/Bubble";
-import digitalFont from "figlet/fonts/Digital";
 import doomFont from "figlet/fonts/Doom";
 import graffitiFont from "figlet/fonts/Graffiti";
 import miniFont from "figlet/fonts/Mini";
@@ -34,7 +33,6 @@ const FIGLET_FONT_DATA: Record<AsciiFontName, string> = {
   Big: bigFont,
   Block: blockFont,
   Bubble: bubbleFont,
-  Digital: digitalFont,
   Doom: doomFont,
   Graffiti: graffitiFont,
   Mini: miniFont,
