@@ -90,6 +90,32 @@ function getTelegramSendLabel(sendStatus: string) {
   return "send to telegram";
 }
 
+function buildLogoCodeExport(
+  result: Extract<ImageRenderResponse, { ok: true }>,
+) {
+  const rows = result.asciiText.replace(/\r\n/g, "\n").split("\n");
+  const width = Math.max(0, ...rows.map((row) => row.length));
+  const rowLines = rows
+    .map((row) => "    " + JSON.stringify(row) + ",")
+    .join("\n");
+
+  return [
+    "// ASCIILOGRAPH_LOGO_EXPORT v1",
+    "// Do not reflow these rows. Spaces are part of the logo.",
+    "export const ASCIILOGRAPH_LOGO_EXPORT = {",
+    `  presetId: ${JSON.stringify(result.presetId)},`,
+    `  sourceFileName: ${JSON.stringify(result.fileName)},`,
+    `  width: ${width},`,
+    `  height: ${rows.length},`,
+    `  pngWidth: ${result.image.width},`,
+    `  pngHeight: ${result.image.height},`,
+    "  rows: [",
+    rowLines,
+    "  ],",
+    "} as const;",
+  ].join("\n");
+}
+
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -274,6 +300,7 @@ export function ImageGenerator() {
   const [status, setStatus] = useState("idle");
   const [sendStatus, setSendStatus] = useState("send to telegram");
   const [copyStatus, setCopyStatus] = useState("copy ascii");
+  const [logoCodeStatus, setLogoCodeStatus] = useState("copy logo code");
   const [error, setError] = useState("");
   const [qualityReport, setQualityReport] =
     useState<ImageQualityReport | null>(null);
@@ -357,6 +384,7 @@ export function ImageGenerator() {
 
     setStatus("rendering");
     setSendStatus("send to telegram");
+    setLogoCodeStatus("copy logo code");
     setError("");
     setSendError("");
     setSendHelpUrl("");
@@ -384,6 +412,7 @@ export function ImageGenerator() {
       setResult(payload);
       setStatus("done");
       setSendStatus("send to telegram");
+      setLogoCodeStatus("copy logo code");
     } catch {
       setResult({
         ok: false,
@@ -608,6 +637,19 @@ export function ImageGenerator() {
     window.setTimeout(() => setCopyStatus("copy ascii"), 1400);
   };
 
+  const copyLogoCode = async () => {
+    if (!result?.ok) return;
+
+    try {
+      await navigator.clipboard.writeText(buildLogoCodeExport(result));
+      setLogoCodeStatus("logo code copied");
+    } catch {
+      setLogoCodeStatus("copy failed");
+    }
+
+    window.setTimeout(() => setLogoCodeStatus("copy logo code"), 1600);
+  };
+
   return (
     <div className="mt-4 space-y-3">
       <div className="grid grid-cols-3 gap-2">
@@ -622,6 +664,7 @@ export function ImageGenerator() {
               setSendError("");
               setSendHelpUrl("");
               setSendStatus("send to telegram");
+              setLogoCodeStatus("copy logo code");
               resetImageVideo();
               setStatus(file ? "style changed" : "idle");
             }}
@@ -642,6 +685,7 @@ export function ImageGenerator() {
               setFile(null);
               setFileUrl("");
               setResult(null);
+              setLogoCodeStatus("copy logo code");
               setQualityReport(null);
               setQualityStatus("");
               setSendError("");
@@ -657,12 +701,14 @@ export function ImageGenerator() {
             setFile(nextFile);
             setFileUrl(nextFile ? URL.createObjectURL(nextFile) : "");
             setResult(null);
+            setLogoCodeStatus("copy logo code");
             setQualityReport(null);
             setQualityStatus(nextFile ? "analyzing source" : "");
             setError("");
             setSendError("");
             setSendHelpUrl("");
             setSendStatus("send to telegram");
+            setLogoCodeStatus("copy logo code");
             resetImageVideo();
             setStatus(nextFile ? "image loaded" : "idle");
           }}
@@ -846,6 +892,15 @@ export function ImageGenerator() {
         </button>
       </div>
 
+      <button
+        className="min-h-10 w-full border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green disabled:cursor-not-allowed disabled:border-ascii-muted disabled:text-ascii-white/35"
+        disabled={!result?.ok}
+        onClick={copyLogoCode}
+        type="button"
+      >
+        {logoCodeStatus}
+      </button>
+
       {sendStatus === "done" ? (
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -855,6 +910,7 @@ export function ImageGenerator() {
               setSendStatus("send to telegram");
               setSendError("");
               setSendHelpUrl("");
+              setLogoCodeStatus("copy logo code");
               resetImageVideo();
               setStatus(file ? "style changed" : "idle");
             }}
