@@ -77,9 +77,12 @@ export function AsciilographMark() {
   return (
     <div
       aria-hidden="true"
-      className="asciilograph-mark w-full overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
+      className="asciilograph-mark flex w-full justify-center overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
     >
-      <pre className="m-0 text-[0.25rem] font-black leading-[0.58] tracking-[-0.1em] min-[370px]:text-[0.27rem] min-[420px]:text-[0.31rem] sm:text-[0.36rem]">
+      <pre
+        className="m-0 inline-block w-max max-w-none text-[0.25rem] font-black leading-[0.58] tracking-[-0.1em] min-[370px]:text-[0.27rem] min-[420px]:text-[0.31rem] sm:text-[0.36rem]"
+        style={{ transform: "scaleX(0.76)", transformOrigin: "center" }}
+      >
         {MARK_LINES.map((row, rowIndex) => (
           <span key={`logo-row-${rowIndex}`}>
             {row.split("").map((char, charIndex) => (
