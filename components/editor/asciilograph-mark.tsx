@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 const MARK_LINES = [
   "",
   "                                                                                     ░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░",
@@ -57,20 +59,27 @@ const MARK_LINES = [
   "",
 ] as const;
 
-function getGlyphClass(char: string) {
-  if (char === "█" || char === "▓") {
-    return "text-ascii-green";
-  }
+const LOGO_COLUMNS = 127;
+const LOGO_ROWS = 54;
+const CELL_STYLES: Record<string, CSSProperties> = {
+  "░": {
+    backgroundColor: "rgba(0, 255, 102, 0.18)",
+  },
+  "▒": {
+    backgroundColor: "rgba(80, 255, 160, 0.42)",
+  },
+  "▓": {
+    backgroundColor: "rgba(80, 255, 160, 0.74)",
+    boxShadow: "0 0 4px rgba(0, 255, 102, 0.24)",
+  },
+  "█": {
+    backgroundColor: "rgba(0, 255, 102, 0.96)",
+    boxShadow: "0 0 5px rgba(0, 255, 102, 0.38)",
+  },
+};
 
-  if (char === "▒") {
-    return "text-[#8dffc0]";
-  }
-
-  if (char === "░") {
-    return "text-ascii-green/55";
-  }
-
-  return "text-ascii-green/72";
+function getLogoCellStyle(char: string): CSSProperties | undefined {
+  return CELL_STYLES[char];
 }
 
 export function AsciilographMark() {
@@ -79,24 +88,36 @@ export function AsciilographMark() {
       aria-hidden="true"
       className="asciilograph-mark flex w-full justify-center overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
     >
-      <pre
-        className="m-0 inline-block w-max max-w-none text-[0.25rem] font-black leading-[0.58] tracking-[-0.1em] min-[370px]:text-[0.27rem] min-[420px]:text-[0.31rem] sm:text-[0.36rem]"
-        style={{ transform: "scaleX(0.76)", transformOrigin: "center" }}
+      <div
+        className="grid w-full max-w-[22rem] overflow-hidden"
+        style={{
+          aspectRatio: `${LOGO_COLUMNS * 0.62} / ${LOGO_ROWS * 1.12}`,
+          gridTemplateRows: `repeat(${LOGO_ROWS}, minmax(0, 1fr))`,
+        }}
       >
         {MARK_LINES.map((row, rowIndex) => (
-          <span key={`logo-row-${rowIndex}`}>
-            {row.split("").map((char, charIndex) => (
-              <span
-                className={getGlyphClass(char)}
-                key={`${rowIndex}-${charIndex}`}
-              >
-                {char}
-              </span>
-            ))}
-            {rowIndex < MARK_LINES.length - 1 ? "\n" : null}
-          </span>
+          <div
+            className="grid min-h-0"
+            key={`logo-row-${rowIndex}`}
+            style={{
+              gridTemplateColumns: `repeat(${LOGO_COLUMNS}, minmax(0, 1fr))`,
+            }}
+          >
+            {Array.from({ length: LOGO_COLUMNS }, (_, charIndex) => {
+              const char = row[charIndex] ?? " ";
+
+              return (
+                <span
+                  aria-hidden="true"
+                  className="min-h-0 min-w-0"
+                  key={`${rowIndex}-${charIndex}`}
+                  style={getLogoCellStyle(char)}
+                />
+              );
+            })}
+          </div>
         ))}
-      </pre>
+      </div>
     </div>
   );
 }
