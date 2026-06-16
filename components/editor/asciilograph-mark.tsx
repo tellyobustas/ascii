@@ -62,6 +62,7 @@ const MARK_LINES = [
 
 const LOGO_COLUMNS = 127;
 const LOGO_ROWS = 54;
+const GLITCH_GLYPHS = "%$#@*x&+";
 const CELL_STYLES: Record<string, CSSProperties> = {
   "░": {
     backgroundColor: "rgba(0, 255, 102, 0.18)",
@@ -81,11 +82,13 @@ const CELL_STYLES: Record<string, CSSProperties> = {
 
 type LogoGlitchState = {
   cells: Record<string, CSSProperties>;
+  glyphs: Record<string, string>;
   rows: Record<number, number>;
 };
 
 const EMPTY_GLITCH: LogoGlitchState = {
   cells: {},
+  glyphs: {},
   rows: {},
 };
 
@@ -110,15 +113,17 @@ function getLogoCellStyle(
 function buildLogoGlitch(): LogoGlitchState {
   const rows: Record<number, number> = {};
   const cells: Record<string, CSSProperties> = {};
-  const rowCount = 2 + Math.floor(Math.random() * 4);
-  const cellCount = 22 + Math.floor(Math.random() * 34);
+  const glyphs: Record<string, string> = {};
+  const rowCount = 4 + Math.floor(Math.random() * 6);
+  const cellCount = 58 + Math.floor(Math.random() * 72);
+  const glyphCount = 8 + Math.floor(Math.random() * 16);
 
   for (let index = 0; index < rowCount; index += 1) {
     const row = 4 + Math.floor(Math.random() * (LOGO_ROWS - 10));
-    rows[row] = (Math.random() > 0.5 ? 1 : -1) * (1 + Math.random() * 5);
+    rows[row] = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 10);
   }
 
-  for (let index = 0; index < cellCount; index += 1) {
+  const pickVisibleCell = () => {
     const row = Math.floor(Math.random() * LOGO_ROWS);
     const line = MARK_LINES[row] ?? "";
     const visibleColumns = line
@@ -126,22 +131,39 @@ function buildLogoGlitch(): LogoGlitchState {
       .map((char, column) => (char === " " ? -1 : column))
       .filter((column) => column >= 0);
 
-    if (visibleColumns.length === 0) continue;
+    if (visibleColumns.length === 0) return null;
 
     const column =
       visibleColumns[Math.floor(Math.random() * visibleColumns.length)] ?? 0;
 
+    return { column, row };
+  };
+
+  for (let index = 0; index < cellCount; index += 1) {
+    const cell = pickVisibleCell();
+    if (!cell) continue;
+
+    const { column, row } = cell;
+
     cells[`${row}-${column}`] = {
       backgroundColor:
-        Math.random() > 0.72
+        Math.random() > 0.62
           ? "rgba(242, 255, 246, 0.96)"
           : "rgba(0, 255, 102, 1)",
-      boxShadow: "0 0 8px rgba(0, 255, 102, 0.7)",
+      boxShadow: "0 0 11px rgba(0, 255, 102, 0.78)",
       opacity: 1,
     };
   }
 
-  return { cells, rows };
+  for (let index = 0; index < glyphCount; index += 1) {
+    const cell = pickVisibleCell();
+    if (!cell) continue;
+
+    glyphs[`${cell.row}-${cell.column}`] =
+      GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)] ?? "#";
+  }
+
+  return { cells, glyphs, rows };
 }
 
 export function AsciilographMark() {
@@ -153,14 +175,27 @@ export function AsciilographMark() {
     }
 
     let resetTimer: number | undefined;
-    const glitchTimer = window.setInterval(() => {
+    let glitchTimer: number | undefined;
+    const scheduleGlitch = (delay: number) => {
+      glitchTimer = window.setTimeout(() => {
       setGlitch(buildLogoGlitch());
       window.clearTimeout(resetTimer);
-      resetTimer = window.setTimeout(() => setGlitch(EMPTY_GLITCH), 72);
-    }, 420 + Math.random() * 180);
+        resetTimer = window.setTimeout(
+          () => setGlitch(EMPTY_GLITCH),
+          72 + Math.random() * 80,
+        );
+
+        const isBurst = Math.random() > 0.68;
+        scheduleGlitch(
+          isBurst ? 90 + Math.random() * 170 : 440 + Math.random() * 760,
+        );
+      }, delay);
+    };
+
+    scheduleGlitch(180 + Math.random() * 360);
 
     return () => {
-      window.clearInterval(glitchTimer);
+      window.clearTimeout(glitchTimer);
       window.clearTimeout(resetTimer);
     };
   }, []);
@@ -190,11 +225,12 @@ export function AsciilographMark() {
           >
             {Array.from({ length: LOGO_COLUMNS }, (_, charIndex) => {
               const char = row[charIndex] ?? " ";
+              const glyph = glitch.glyphs[`${rowIndex}-${charIndex}`];
 
               return (
                 <span
                   aria-hidden="true"
-                  className="min-h-0 min-w-0"
+                  className="relative min-h-0 min-w-0"
                   key={`${rowIndex}-${charIndex}`}
                   style={getLogoCellStyle(
                     char,
@@ -202,7 +238,13 @@ export function AsciilographMark() {
                     charIndex,
                     glitch.cells,
                   )}
-                />
+                >
+                  {glyph ? (
+                    <span className="absolute left-1/2 top-1/2 font-mono text-[0.46rem] font-black leading-none text-ascii-white [text-shadow:0_0_8px_rgba(0,255,102,0.95)] [transform:translate(-50%,-50%)_scale(1.55)]">
+                      {glyph}
+                    </span>
+                  ) : null}
+                </span>
               );
             })}
           </div>
