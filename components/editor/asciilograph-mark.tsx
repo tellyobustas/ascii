@@ -62,7 +62,7 @@ const MARK_LINES = [
 
 const LOGO_COLUMNS = 127;
 const LOGO_ROWS = 54;
-const GLITCH_GLYPHS = "%$#@*x&+";
+const GLITCH_GLYPHS = "%$#@*x&+<>/\\01";
 const CELL_STYLES: Record<string, CSSProperties> = {
   "░": {
     backgroundColor: "rgba(0, 255, 102, 0.18)",
@@ -114,13 +114,18 @@ function buildLogoGlitch(): LogoGlitchState {
   const rows: Record<number, number> = {};
   const cells: Record<string, CSSProperties> = {};
   const glyphs: Record<string, string> = {};
-  const rowCount = 4 + Math.floor(Math.random() * 6);
-  const cellCount = 58 + Math.floor(Math.random() * 72);
-  const glyphCount = 8 + Math.floor(Math.random() * 16);
+  const rowCount = 7 + Math.floor(Math.random() * 10);
+  const cellCount = 110 + Math.floor(Math.random() * 120);
+  const glyphCount = 18 + Math.floor(Math.random() * 28);
 
   for (let index = 0; index < rowCount; index += 1) {
     const row = 4 + Math.floor(Math.random() * (LOGO_ROWS - 10));
-    rows[row] = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 10);
+    rows[row] = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 20);
+
+    if (Math.random() > 0.48 && row + 1 < LOGO_ROWS) {
+      rows[row + 1] =
+        (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 12);
+    }
   }
 
   const pickVisibleCell = () => {
@@ -147,10 +152,19 @@ function buildLogoGlitch(): LogoGlitchState {
 
     cells[`${row}-${column}`] = {
       backgroundColor:
-        Math.random() > 0.62
+        Math.random() > 0.55
           ? "rgba(242, 255, 246, 0.96)"
           : "rgba(0, 255, 102, 1)",
-      boxShadow: "0 0 11px rgba(0, 255, 102, 0.78)",
+      boxShadow:
+        Math.random() > 0.72
+          ? "0 0 18px rgba(242, 255, 246, 0.95)"
+          : "0 0 13px rgba(0, 255, 102, 0.9)",
+      transform:
+        Math.random() > 0.78
+          ? `translate(${(Math.random() - 0.5) * 6}px, ${
+              (Math.random() - 0.5) * 4
+            }px) scale(${1.15 + Math.random() * 0.75})`
+          : undefined,
       opacity: 1,
     };
   }
@@ -159,8 +173,17 @@ function buildLogoGlitch(): LogoGlitchState {
     const cell = pickVisibleCell();
     if (!cell) continue;
 
-    glyphs[`${cell.row}-${cell.column}`] =
+    const key = `${cell.row}-${cell.column}`;
+    glyphs[key] =
       GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)] ?? "#";
+    cells[key] = {
+      backgroundColor: "rgba(0, 255, 102, 0.98)",
+      boxShadow: "0 0 18px rgba(0, 255, 102, 0.96)",
+      opacity: 1,
+      transform: `translate(${(Math.random() - 0.5) * 8}px, ${
+        (Math.random() - 0.5) * 5
+      }px) scale(${1.2 + Math.random() * 0.95})`,
+    };
   }
 
   return { cells, glyphs, rows };
@@ -176,23 +199,34 @@ export function AsciilographMark() {
 
     let resetTimer: number | undefined;
     let glitchTimer: number | undefined;
+    let burstLeft = 0;
     const scheduleGlitch = (delay: number) => {
       glitchTimer = window.setTimeout(() => {
-      setGlitch(buildLogoGlitch());
-      window.clearTimeout(resetTimer);
+        setGlitch(buildLogoGlitch());
+        window.clearTimeout(resetTimer);
         resetTimer = window.setTimeout(
           () => setGlitch(EMPTY_GLITCH),
-          72 + Math.random() * 80,
+          42 + Math.random() * 54,
         );
 
-        const isBurst = Math.random() > 0.68;
-        scheduleGlitch(
-          isBurst ? 90 + Math.random() * 170 : 440 + Math.random() * 760,
-        );
+        if (burstLeft > 0) {
+          burstLeft -= 1;
+          scheduleGlitch(34 + Math.random() * 86);
+          return;
+        }
+
+        const shouldBurst = Math.random() > 0.56;
+        if (shouldBurst) {
+          burstLeft = 2 + Math.floor(Math.random() * 5);
+          scheduleGlitch(45 + Math.random() * 95);
+          return;
+        }
+
+        scheduleGlitch(280 + Math.random() * 720);
       }, delay);
     };
 
-    scheduleGlitch(180 + Math.random() * 360);
+    scheduleGlitch(90 + Math.random() * 220);
 
     return () => {
       window.clearTimeout(glitchTimer);
@@ -240,7 +274,7 @@ export function AsciilographMark() {
                   )}
                 >
                   {glyph ? (
-                    <span className="absolute left-1/2 top-1/2 font-mono text-[0.46rem] font-black leading-none text-ascii-white [text-shadow:0_0_8px_rgba(0,255,102,0.95)] [transform:translate(-50%,-50%)_scale(1.55)]">
+                    <span className="absolute left-1/2 top-1/2 font-mono text-[0.58rem] font-black leading-none text-ascii-white [text-shadow:0_0_10px_rgba(242,255,246,0.9),0_0_18px_rgba(0,255,102,0.9)] [transform:translate(-50%,-50%)_scale(1.8)]">
                       {glyph}
                     </span>
                   ) : null}
