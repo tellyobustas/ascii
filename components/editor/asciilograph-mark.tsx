@@ -63,6 +63,25 @@ const MARK_LINES = [
 const LOGO_COLUMNS = 127;
 const LOGO_ROWS = 54;
 const GLITCH_GLYPHS = "%$#@*x&+<>/\\01";
+const ORBIT_GLYPHS = "%$#@*x&+<>/\\01_-+=";
+const ORBIT_GLYPH_COUNT = 42;
+const ORBIT_GLYPHS_CLOUD = Array.from({ length: ORBIT_GLYPH_COUNT }, (_, index) => {
+  const orbit = index / ORBIT_GLYPH_COUNT;
+  const wave = Math.sin(index * 1.73);
+  const alternate = Math.cos(index * 2.31);
+
+  return {
+    delay: `${-(index * 0.37 + (index % 5) * 0.19).toFixed(2)}s`,
+    duration: `${5.8 + (index % 9) * 0.62}s`,
+    glyph: ORBIT_GLYPHS[index % ORBIT_GLYPHS.length] ?? "#",
+    left: `${7 + orbit * 86 + alternate * 3.8}%`,
+    top: `${9 + ((index * 29) % 82) + wave * 5.2}%`,
+    size: `${0.48 + (index % 7) * 0.095}rem`,
+    opacity: `${0.16 + (index % 6) * 0.055}`,
+    driftX: `${(alternate * 34).toFixed(1)}px`,
+    driftY: `${(wave * 24).toFixed(1)}px`,
+  };
+});
 const CELL_STYLES: Record<string, CSSProperties> = {
   "░": {
     backgroundColor: "rgba(0, 255, 102, 0.18)",
@@ -114,17 +133,23 @@ function buildLogoGlitch(): LogoGlitchState {
   const rows: Record<number, number> = {};
   const cells: Record<string, CSSProperties> = {};
   const glyphs: Record<string, string> = {};
-  const rowCount = 7 + Math.floor(Math.random() * 10);
-  const cellCount = 110 + Math.floor(Math.random() * 120);
-  const glyphCount = 18 + Math.floor(Math.random() * 28);
+  const rowCount = 12 + Math.floor(Math.random() * 14);
+  const cellCount = 140 + Math.floor(Math.random() * 150);
+  const glyphCount = 26 + Math.floor(Math.random() * 34);
 
   for (let index = 0; index < rowCount; index += 1) {
     const row = 4 + Math.floor(Math.random() * (LOGO_ROWS - 10));
-    rows[row] = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 20);
+    const direction = Math.random() > 0.5 ? 1 : -1;
+    const slide = direction * (18 + Math.random() * 58);
+    const bandHeight = 3 + Math.floor(Math.random() * 6);
 
-    if (Math.random() > 0.48 && row + 1 < LOGO_ROWS) {
-      rows[row + 1] =
-        (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 12);
+    for (let bandIndex = 0; bandIndex < bandHeight; bandIndex += 1) {
+      const bandRow = row + bandIndex;
+      if (bandRow >= LOGO_ROWS) break;
+
+      rows[bandRow] =
+        slide * (1 - bandIndex * 0.08) +
+        (Math.random() > 0.5 ? 1 : -1) * Math.random() * 8;
     }
   }
 
@@ -152,7 +177,7 @@ function buildLogoGlitch(): LogoGlitchState {
 
     cells[`${row}-${column}`] = {
       backgroundColor:
-        Math.random() > 0.55
+        Math.random() > 0.5
           ? "rgba(242, 255, 246, 0.96)"
           : "rgba(0, 255, 102, 1)",
       boxShadow:
@@ -160,10 +185,10 @@ function buildLogoGlitch(): LogoGlitchState {
           ? "0 0 18px rgba(242, 255, 246, 0.95)"
           : "0 0 13px rgba(0, 255, 102, 0.9)",
       transform:
-        Math.random() > 0.78
-          ? `translate(${(Math.random() - 0.5) * 6}px, ${
-              (Math.random() - 0.5) * 4
-            }px) scale(${1.15 + Math.random() * 0.75})`
+        Math.random() > 0.68
+          ? `translate(${(Math.random() - 0.5) * 10}px, ${
+              (Math.random() - 0.5) * 7
+            }px) scale(${1.15 + Math.random() * 0.95})`
           : undefined,
       opacity: 1,
     };
@@ -180,9 +205,9 @@ function buildLogoGlitch(): LogoGlitchState {
       backgroundColor: "rgba(0, 255, 102, 0.98)",
       boxShadow: "0 0 18px rgba(0, 255, 102, 0.96)",
       opacity: 1,
-      transform: `translate(${(Math.random() - 0.5) * 8}px, ${
-        (Math.random() - 0.5) * 5
-      }px) scale(${1.2 + Math.random() * 0.95})`,
+      transform: `translate(${(Math.random() - 0.5) * 14}px, ${
+        (Math.random() - 0.5) * 9
+      }px) scale(${1.25 + Math.random() * 1.1})`,
     };
   }
 
@@ -206,23 +231,23 @@ export function AsciilographMark() {
         window.clearTimeout(resetTimer);
         resetTimer = window.setTimeout(
           () => setGlitch(EMPTY_GLITCH),
-          42 + Math.random() * 54,
+          34 + Math.random() * 48,
         );
 
         if (burstLeft > 0) {
           burstLeft -= 1;
-          scheduleGlitch(34 + Math.random() * 86);
+          scheduleGlitch(28 + Math.random() * 72);
           return;
         }
 
         const shouldBurst = Math.random() > 0.56;
         if (shouldBurst) {
-          burstLeft = 2 + Math.floor(Math.random() * 5);
-          scheduleGlitch(45 + Math.random() * 95);
+          burstLeft = 3 + Math.floor(Math.random() * 7);
+          scheduleGlitch(32 + Math.random() * 76);
           return;
         }
 
-        scheduleGlitch(280 + Math.random() * 720);
+        scheduleGlitch(220 + Math.random() * 620);
       }, delay);
     };
 
@@ -237,10 +262,32 @@ export function AsciilographMark() {
   return (
     <div
       aria-hidden="true"
-      className="asciilograph-mark flex w-full justify-center overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
+      className="asciilograph-mark relative flex w-full justify-center overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
     >
+      <div className="pointer-events-none absolute inset-[-18%] opacity-90">
+        {ORBIT_GLYPHS_CLOUD.map((glyph, index) => (
+          <span
+            className="asciilograph-mark-orbit absolute font-mono font-black leading-none text-ascii-green"
+            key={`logo-orbit-${index}`}
+            style={
+              {
+                "--orbit-drift-x": glyph.driftX,
+                "--orbit-drift-y": glyph.driftY,
+                animationDelay: glyph.delay,
+                animationDuration: glyph.duration,
+                fontSize: glyph.size,
+                left: glyph.left,
+                opacity: glyph.opacity,
+                top: glyph.top,
+              } as CSSProperties
+            }
+          >
+            {glyph.glyph}
+          </span>
+        ))}
+      </div>
       <div
-        className="grid w-full max-w-[22rem] overflow-hidden"
+        className="relative z-10 grid w-full max-w-[22rem] overflow-hidden"
         style={{
           aspectRatio: `${LOGO_COLUMNS * 0.62} / ${LOGO_ROWS * 1.12}`,
           gridTemplateRows: `repeat(${LOGO_ROWS}, minmax(0, 1fr))`,
