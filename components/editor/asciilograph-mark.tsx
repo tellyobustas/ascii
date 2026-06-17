@@ -303,9 +303,9 @@ export function AsciilographMark() {
   return (
     <div
       aria-hidden="true"
-      className="asciilograph-mark relative flex w-full justify-center overflow-hidden bg-black/20 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
+      className="asciilograph-mark relative flex w-full justify-center overflow-visible bg-black/20 px-8 py-2 shadow-[0_0_14px_rgba(0,255,102,0.08)]"
     >
-      <div className="pointer-events-none absolute inset-[-18%] opacity-90">
+      <div className="pointer-events-none absolute inset-y-[-26%] left-[-24%] right-[-24%] opacity-90">
         {ORBIT_GLYPHS_CLOUD.map((glyph, index) => (
           <span
             className="asciilograph-mark-orbit absolute font-mono font-black leading-none text-ascii-green"
@@ -328,7 +328,7 @@ export function AsciilographMark() {
         ))}
       </div>
       <div
-        className="relative z-10 grid w-full max-w-[22rem] overflow-hidden"
+        className="relative z-10 grid w-full max-w-[22rem] overflow-visible"
         style={{
           aspectRatio: `${LOGO_COLUMNS * 0.62} / ${LOGO_ROWS * 1.12}`,
           gridTemplateRows: `repeat(${LOGO_ROWS}, minmax(0, 1fr))`,
