@@ -105,6 +105,8 @@ type LogoGlitchState = {
   rows: Record<number, number>;
 };
 
+type LogoGlitchIntensity = "soft" | "heavy";
+
 const EMPTY_GLITCH: LogoGlitchState = {
   cells: {},
   glyphs: {},
@@ -129,19 +131,30 @@ function getLogoCellStyle(
   };
 }
 
-function buildLogoGlitch(): LogoGlitchState {
+function buildLogoGlitch(intensity: LogoGlitchIntensity): LogoGlitchState {
   const rows: Record<number, number> = {};
   const cells: Record<string, CSSProperties> = {};
   const glyphs: Record<string, string> = {};
-  const rowCount = 12 + Math.floor(Math.random() * 14);
-  const cellCount = 140 + Math.floor(Math.random() * 150);
-  const glyphCount = 26 + Math.floor(Math.random() * 34);
+  const isHeavy = intensity === "heavy";
+  const rowCount = isHeavy
+    ? 12 + Math.floor(Math.random() * 14)
+    : 2 + Math.floor(Math.random() * 4);
+  const cellCount = isHeavy
+    ? 140 + Math.floor(Math.random() * 150)
+    : 22 + Math.floor(Math.random() * 34);
+  const glyphCount = isHeavy
+    ? 26 + Math.floor(Math.random() * 34)
+    : 3 + Math.floor(Math.random() * 7);
 
   for (let index = 0; index < rowCount; index += 1) {
     const row = 4 + Math.floor(Math.random() * (LOGO_ROWS - 10));
     const direction = Math.random() > 0.5 ? 1 : -1;
-    const slide = direction * (18 + Math.random() * 58);
-    const bandHeight = 3 + Math.floor(Math.random() * 6);
+    const slide = isHeavy
+      ? direction * (18 + Math.random() * 58)
+      : direction * (2 + Math.random() * 7);
+    const bandHeight = isHeavy
+      ? 3 + Math.floor(Math.random() * 6)
+      : 1 + Math.floor(Math.random() * 2);
 
     for (let bandIndex = 0; bandIndex < bandHeight; bandIndex += 1) {
       const bandRow = row + bandIndex;
@@ -149,7 +162,7 @@ function buildLogoGlitch(): LogoGlitchState {
 
       rows[bandRow] =
         slide * (1 - bandIndex * 0.08) +
-        (Math.random() > 0.5 ? 1 : -1) * Math.random() * 8;
+        (Math.random() > 0.5 ? 1 : -1) * Math.random() * (isHeavy ? 8 : 2);
     }
   }
 
@@ -182,15 +195,19 @@ function buildLogoGlitch(): LogoGlitchState {
           : "rgba(0, 255, 102, 1)",
       boxShadow:
         Math.random() > 0.72
-          ? "0 0 18px rgba(242, 255, 246, 0.95)"
-          : "0 0 13px rgba(0, 255, 102, 0.9)",
+          ? isHeavy
+            ? "0 0 18px rgba(242, 255, 246, 0.95)"
+            : "0 0 9px rgba(242, 255, 246, 0.48)"
+          : isHeavy
+            ? "0 0 13px rgba(0, 255, 102, 0.9)"
+            : "0 0 7px rgba(0, 255, 102, 0.42)",
       transform:
-        Math.random() > 0.68
-          ? `translate(${(Math.random() - 0.5) * 10}px, ${
-              (Math.random() - 0.5) * 7
-            }px) scale(${1.15 + Math.random() * 0.95})`
+        Math.random() > (isHeavy ? 0.68 : 0.86)
+          ? `translate(${(Math.random() - 0.5) * (isHeavy ? 10 : 4)}px, ${
+              (Math.random() - 0.5) * (isHeavy ? 7 : 3)
+            }px) scale(${1.05 + Math.random() * (isHeavy ? 1.05 : 0.34)})`
           : undefined,
-      opacity: 1,
+      opacity: isHeavy ? 1 : 0.72 + Math.random() * 0.2,
     };
   }
 
@@ -202,12 +219,16 @@ function buildLogoGlitch(): LogoGlitchState {
     glyphs[key] =
       GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)] ?? "#";
     cells[key] = {
-      backgroundColor: "rgba(0, 255, 102, 0.98)",
-      boxShadow: "0 0 18px rgba(0, 255, 102, 0.96)",
-      opacity: 1,
-      transform: `translate(${(Math.random() - 0.5) * 14}px, ${
-        (Math.random() - 0.5) * 9
-      }px) scale(${1.25 + Math.random() * 1.1})`,
+      backgroundColor: isHeavy
+        ? "rgba(0, 255, 102, 0.98)"
+        : "rgba(0, 255, 102, 0.72)",
+      boxShadow: isHeavy
+        ? "0 0 18px rgba(0, 255, 102, 0.96)"
+        : "0 0 8px rgba(0, 255, 102, 0.48)",
+      opacity: isHeavy ? 1 : 0.68,
+      transform: `translate(${(Math.random() - 0.5) * (isHeavy ? 14 : 4)}px, ${
+        (Math.random() - 0.5) * (isHeavy ? 9 : 3)
+      }px) scale(${1.08 + Math.random() * (isHeavy ? 1.27 : 0.42)})`,
     };
   }
 
@@ -223,38 +244,58 @@ export function AsciilographMark() {
     }
 
     let resetTimer: number | undefined;
-    let glitchTimer: number | undefined;
+    let softTimer: number | undefined;
+    let heavyTimer: number | undefined;
+    let heavyStepTimer: number | undefined;
     let burstLeft = 0;
-    const scheduleGlitch = (delay: number) => {
-      glitchTimer = window.setTimeout(() => {
-        setGlitch(buildLogoGlitch());
-        window.clearTimeout(resetTimer);
-        resetTimer = window.setTimeout(
-          () => setGlitch(EMPTY_GLITCH),
-          34 + Math.random() * 48,
-        );
 
-        if (burstLeft > 0) {
-          burstLeft -= 1;
-          scheduleGlitch(28 + Math.random() * 72);
-          return;
+    const flashGlitch = (
+      intensity: LogoGlitchIntensity,
+      holdMs: number,
+    ) => {
+      setGlitch(buildLogoGlitch(intensity));
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => setGlitch(EMPTY_GLITCH), holdMs);
+    };
+
+    const scheduleSoftGlitch = (delay: number) => {
+      softTimer = window.setTimeout(() => {
+        if (burstLeft <= 0) {
+          flashGlitch("soft", 52 + Math.random() * 80);
         }
 
-        const shouldBurst = Math.random() > 0.56;
-        if (shouldBurst) {
-          burstLeft = 3 + Math.floor(Math.random() * 7);
-          scheduleGlitch(32 + Math.random() * 76);
-          return;
-        }
-
-        scheduleGlitch(220 + Math.random() * 620);
+        scheduleSoftGlitch(780 + Math.random() * 1450);
       }, delay);
     };
 
-    scheduleGlitch(90 + Math.random() * 220);
+    const runHeavyBurst = () => {
+      flashGlitch("heavy", 34 + Math.random() * 48);
+
+      if (burstLeft > 0) {
+        burstLeft -= 1;
+        heavyStepTimer = window.setTimeout(
+          runHeavyBurst,
+          34 + Math.random() * 94,
+        );
+        return;
+      }
+
+      heavyTimer = window.setTimeout(() => {
+        burstLeft = 3 + Math.floor(Math.random() * 6);
+        runHeavyBurst();
+      }, 10000 + Math.random() * 5000);
+    };
+
+    scheduleSoftGlitch(420 + Math.random() * 760);
+    heavyTimer = window.setTimeout(() => {
+      burstLeft = 3 + Math.floor(Math.random() * 6);
+      runHeavyBurst();
+    }, 4500 + Math.random() * 3500);
 
     return () => {
-      window.clearTimeout(glitchTimer);
+      window.clearTimeout(softTimer);
+      window.clearTimeout(heavyTimer);
+      window.clearTimeout(heavyStepTimer);
       window.clearTimeout(resetTimer);
     };
   }, []);
