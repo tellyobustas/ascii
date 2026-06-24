@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { IMAGE_LIMITS } from "@/lib/ascii/image";
 import { renderImageToAsciiGlitchVideo } from "@/lib/ascii/image-video-renderer";
 import { videoQueue } from "@/lib/queue";
+import { authorizeTelegramRequest } from "@/lib/telegram/authorize";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ function isSupportedImage(file: File) {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
+    await authorizeTelegramRequest(String(formData.get("initData") ?? ""));
     const file = formData.get("file");
 
     if (!(file instanceof File)) {

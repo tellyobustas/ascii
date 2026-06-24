@@ -64,6 +64,8 @@ type PreparedTextPostResponse =
       ok: true;
     }
   | {
+      channelUrl?: string;
+      code?: "SUBSCRIPTION_REQUIRED";
       message: string;
       ok: false;
     };
@@ -79,6 +81,7 @@ function getTelegramSendLabel(sendStatus: string) {
   if (sendStatus === "sending") return "sending";
   if (sendStatus === "done") return "done";
   if (sendStatus === "start bot") return "start bot";
+  if (sendStatus === "subscribe") return "subscribe";
 
   return "send to telegram";
 }
@@ -128,6 +131,7 @@ export function TextGenerator() {
           body: JSON.stringify({
             canvasPreset,
             font,
+            initData: getTelegramInitData(),
             text,
           }),
           headers: {
@@ -224,6 +228,17 @@ export function TextGenerator() {
         const payload = (await response.json()) as PreparedTextPostResponse;
 
         if (!response.ok || !payload.ok) {
+          if (!payload.ok && payload.code === "SUBSCRIPTION_REQUIRED") {
+            setTextPostStatus("subscribe");
+            setTextPostError(payload.message);
+
+            if (payload.channelUrl) {
+              openBotStartUrl(payload.channelUrl);
+            }
+
+            return;
+          }
+
           throw new Error(payload.ok ? "Could not prepare text post." : payload.message);
         }
 
@@ -287,6 +302,7 @@ export function TextGenerator() {
           canvasPreset,
           color: videoColor,
           font,
+          initData: getTelegramInitData(),
           text,
         }),
         headers: {
@@ -368,12 +384,16 @@ export function TextGenerator() {
         setSendStatus(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? "start bot"
+            : failedPayload.code === "SUBSCRIPTION_REQUIRED"
+              ? "subscribe"
             : "send to telegram",
         );
         setSendHelpUrl(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? failedPayload.startUrl || getBotStartUrl()
-            : "",
+            : failedPayload.code === "SUBSCRIPTION_REQUIRED"
+              ? failedPayload.channelUrl || ""
+              : "",
         );
         setSendError(
           getTelegramSendErrorCopy(

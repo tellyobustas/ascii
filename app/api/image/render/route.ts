@@ -7,6 +7,7 @@ import {
   IMAGE_RENDER_MODES,
 } from "@/lib/ascii/image";
 import { renderImageToAsciiPng } from "@/lib/ascii/image-renderer";
+import { authorizeTelegramRequest } from "@/lib/telegram/authorize";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
+    await authorizeTelegramRequest(String(formData.get("initData") ?? ""));
     const file = formData.get("file");
 
     if (!(file instanceof File)) {

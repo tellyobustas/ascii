@@ -6,6 +6,10 @@ import {
   cleanText,
   renderTelegramInlineAsciiText,
 } from "@/lib/ascii/text-renderer";
+import {
+  requireTelegramChannelSubscription,
+  TelegramSubscriptionRequiredError,
+} from "@/lib/telegram/subscription";
 import { validateTelegramInitData } from "@/lib/telegram/validate-init-data";
 
 export const runtime = "nodejs";
@@ -54,6 +58,10 @@ export async function POST(request: Request) {
     }
 
     const session = await validateTelegramInitData(body.initData ?? "", token);
+    await requireTelegramChannelSubscription({
+      botToken: token,
+      userId: session.userId,
+    });
     const font: AsciiFontName = isAsciiFontName(String(body.font ?? ""))
       ? (body.font as AsciiFontName)
       : "Graffiti";
@@ -101,6 +109,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
+        channelUrl:
+          error instanceof TelegramSubscriptionRequiredError
+            ? error.channelUrl
+            : undefined,
+        code:
+          error instanceof TelegramSubscriptionRequiredError
+            ? "SUBSCRIPTION_REQUIRED"
+            : undefined,
         ok: false,
         message,
       },

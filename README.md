@@ -54,7 +54,20 @@ ASCII — Telegram Mini App и Telegram Bot для генераторов тек
     NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=
     NEXT_PUBLIC_APP_URL=
     TELEGRAM_WEBAPP_URL=
+    REQUIRED_CHANNEL_USERNAME=
+    REQUIRED_CHANNEL_ID=
+    REQUIRED_CHANNEL_URL=
+    REQUIRED_CHANNEL_TITLE=
     BLOB_READ_WRITE_TOKEN=
+
+Для ограничения доступа по подписке укажи один из вариантов:
+
+- `REQUIRED_CHANNEL_USERNAME=@your_channel` для публичного канала.
+- `REQUIRED_CHANNEL_ID=-1001234567890` для приватного канала.
+- `REQUIRED_CHANNEL_URL=https://t.me/your_channel` или invite link для кнопки SUBSCRIBE.
+- `REQUIRED_CHANNEL_TITLE=@your_channel` для текста в боте и Mini App.
+
+Бот должен быть админом канала, иначе Telegram Bot API может не дать проверить подписку через `getChatMember`.
 
 ## Локальный запуск
 
@@ -85,13 +98,12 @@ Bot worker:
 6. TEXT generator: figlet font cards, canvas ratio, live fit preview, Telegram text publish, MP4 export.
 7. IMAGE generator: upload JPG/PNG/WebP, mode buttons, Sharp render, preview, download PNG, copy ASCII.
 8. VIDEO generator: upload MP4/MOV/WebM, mode buttons, fps/width controls, FFmpeg render, preview, download MP4.
+9. Subscription gate: /start, Mini App validate, Telegram publish/export закрываются проверкой подписки на канал.
 
 Следующие этапы добавят:
 
-1. Полную серверную проверку initData через BOT_TOKEN.
-2. Отправку PNG/MP4 результата пользователю из backend/bot слоя.
-3. Асинхронный queue/job UI для долгого VIDEO render.
-4. Расширенные настройки яркости, контраста, density, invert и glow.
+1. Асинхронный queue/job UI для долгого VIDEO render.
+2. Расширенные настройки яркости, контраста, density, invert и glow.
 
 Для локального теста Mini App в Telegram обычно понадобится публичный HTTPS URL, например через ngrok:
 

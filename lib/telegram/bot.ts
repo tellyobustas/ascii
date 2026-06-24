@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 
 export const OPEN_ASCII_BUTTON_TEXT = "OPEN ASCII";
+export const CHECK_SUBSCRIPTION_CALLBACK = "check_subscription";
 
 export function createAsciiBot(token: string) {
   return new Bot(token);
@@ -8,6 +9,25 @@ export function createAsciiBot(token: string) {
 
 export function createOpenAsciiKeyboard(webAppUrl: string) {
   return new InlineKeyboard().webApp(OPEN_ASCII_BUTTON_TEXT, webAppUrl);
+}
+
+export function createSubscriptionKeyboard({
+  channelUrl,
+  webAppUrl,
+}: {
+  channelUrl: string;
+  webAppUrl: string;
+}) {
+  const keyboard = new InlineKeyboard();
+
+  if (channelUrl) {
+    keyboard.url("SUBSCRIBE", channelUrl).row();
+  }
+
+  return keyboard
+    .text("CHECK SUBSCRIPTION", CHECK_SUBSCRIPTION_CALLBACK)
+    .row()
+    .webApp(OPEN_ASCII_BUTTON_TEXT, webAppUrl);
 }
 
 export function resolveTelegramWebAppUrl(

@@ -13,18 +13,21 @@ import {
   cleanText,
   renderFigletText,
 } from "@/lib/ascii/text-renderer";
+import { authorizeTelegramRequest } from "@/lib/telegram/authorize";
 
 export const runtime = "nodejs";
 
 type TextRenderRequest = {
   canvasPreset?: string;
   font?: string;
+  initData?: string;
   text?: string;
 };
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TextRenderRequest;
+    await authorizeTelegramRequest(body.initData ?? "");
     const text = cleanText(body.text);
     const requestedFont = typeof body.font === "string" ? body.font : "";
     const requestedCanvasPreset =

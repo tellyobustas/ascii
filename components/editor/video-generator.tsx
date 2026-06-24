@@ -51,6 +51,7 @@ function getTelegramSendLabel(sendStatus: string) {
   if (sendStatus === "sending") return "sending";
   if (sendStatus === "done") return "done";
   if (sendStatus === "start bot") return "start bot";
+  if (sendStatus === "subscribe") return "subscribe";
 
   return "send to telegram";
 }
@@ -117,6 +118,7 @@ export function VideoGenerator() {
 
     const formData = new FormData();
     formData.set("file", file);
+    formData.set("initData", getTelegramInitData());
     formData.set("presetId", presetId);
     formData.set("fps", String(fps));
     formData.set("width", String(width));
@@ -201,12 +203,16 @@ export function VideoGenerator() {
         setSendStatus(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? "start bot"
+            : failedPayload.code === "SUBSCRIPTION_REQUIRED"
+              ? "subscribe"
             : "send to telegram",
         );
         setSendHelpUrl(
           failedPayload.code === "BOT_CHAT_NOT_STARTED"
             ? failedPayload.startUrl || getBotStartUrl()
-            : "",
+            : failedPayload.code === "SUBSCRIPTION_REQUIRED"
+              ? failedPayload.channelUrl || ""
+              : "",
         );
         setSendError(
           getTelegramSendErrorCopy(failedPayload, "Could not send MP4."),

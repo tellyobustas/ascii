@@ -3,11 +3,14 @@ import { createHash } from "node:crypto";
 import type { InlineQueryResultArticle } from "grammy/types";
 import { cleanText, renderTelegramInlineAsciiText } from "../lib/ascii/text-renderer";
 import {
+  CHECK_SUBSCRIPTION_CALLBACK,
   createAsciiBot,
   createOpenAsciiKeyboard,
+  createSubscriptionKeyboard,
   resolveTelegramWebAppUrl,
 } from "../lib/telegram/bot";
 import { parseInlineTextQuery } from "../lib/telegram/inline-text";
+import { checkTelegramChannelSubscription } from "../lib/telegram/subscription";
 
 config({ path: ".env.local" });
 config();
@@ -24,7 +27,42 @@ if (!token) {
 const webAppUrl = resolveTelegramWebAppUrl(process.env);
 const bot = createAsciiBot(token);
 
+async function getSubscription(userId?: number) {
+  if (!userId) {
+    return {
+      channelTitle: "the required channel",
+      channelUrl: "",
+      ok: false,
+      required: true,
+    };
+  }
+
+  return checkTelegramChannelSubscription({
+    botToken: token ?? "",
+    userId,
+  });
+}
+
 bot.command("start", async (ctx) => {
+  const subscription = await getSubscription(ctx.from?.id);
+
+  if (!subscription.ok && subscription.required) {
+    await ctx.reply(
+      [
+        "ASCIILOGRAPH is locked.",
+        "",
+        `Subscribe to ${subscription.channelTitle}, then press CHECK SUBSCRIPTION.`,
+      ].join("\n"),
+      {
+        reply_markup: createSubscriptionKeyboard({
+          channelUrl: subscription.channelUrl,
+          webAppUrl,
+        }),
+      },
+    );
+    return;
+  }
+
   const startPayload = typeof ctx.match === "string" ? ctx.match.trim() : "";
   const heading =
     startPayload === "ascii_export"
@@ -46,7 +84,53 @@ bot.command("start", async (ctx) => {
   );
 });
 
+bot.callbackQuery(CHECK_SUBSCRIPTION_CALLBACK, async (ctx) => {
+  const subscription = await getSubscription(ctx.from?.id);
+
+  if (!subscription.ok && subscription.required) {
+    await ctx.answerCallbackQuery({
+      show_alert: true,
+      text: `Subscribe to ${subscription.channelTitle} first.`,
+    });
+    return;
+  }
+
+  await ctx.answerCallbackQuery({
+    text: "Subscription confirmed.",
+  });
+  await ctx.reply("Access unlocked. Open ASCIILOGRAPH.", {
+    reply_markup: createOpenAsciiKeyboard(webAppUrl),
+  });
+});
+
 bot.on("inline_query", async (ctx) => {
+  const subscription = await getSubscription(ctx.inlineQuery.from.id);
+
+  if (!subscription.ok && subscription.required) {
+    await ctx.answerInlineQuery(
+      [
+        {
+          description: `Subscribe to ${subscription.channelTitle} first.`,
+          id: "asciilograph-subscribe",
+          input_message_content: {
+            message_text: `Subscribe to ${subscription.channelTitle} to unlock ASCIILOGRAPH.`,
+          },
+          reply_markup: createSubscriptionKeyboard({
+            channelUrl: subscription.channelUrl,
+            webAppUrl,
+          }),
+          title: "Subscribe to unlock",
+          type: "article",
+        },
+      ],
+      {
+        cache_time: 0,
+        is_personal: true,
+      },
+    );
+    return;
+  }
+
   const parsedQuery = parseInlineTextQuery(ctx.inlineQuery.query);
 
   if (!parsedQuery) {

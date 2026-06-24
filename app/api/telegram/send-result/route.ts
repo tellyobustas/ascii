@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  requireTelegramChannelSubscription,
+  TelegramSubscriptionRequiredError,
+} from "@/lib/telegram/subscription";
 import { validateTelegramInitData } from "@/lib/telegram/validate-init-data";
 
 export const runtime = "nodejs";
@@ -6,6 +10,7 @@ export const runtime = "nodejs";
 type ResultType = "imagePng" | "textVideo" | "videoMp4";
 type TelegramSendErrorCode =
   | "BOT_CHAT_NOT_STARTED"
+  | "SUBSCRIPTION_REQUIRED"
   | "TELEGRAM_SEND_FAILED";
 
 type TelegramSendResultRequest = {
@@ -249,6 +254,10 @@ export async function POST(request: Request) {
 
     const resultType = normalizeResultType(body.resultType);
     const session = await validateTelegramInitData(body.initData ?? "", token);
+    await requireTelegramChannelSubscription({
+      botToken: token,
+      userId: session.userId,
+    });
 
     if (resultType === "imagePng") {
       await sendImageResult({
@@ -287,10 +296,18 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const code =
-      error instanceof TelegramSendError ? error.code : undefined;
+      error instanceof TelegramSubscriptionRequiredError
+        ? "SUBSCRIPTION_REQUIRED"
+        : error instanceof TelegramSendError
+          ? error.code
+          : undefined;
 
     return NextResponse.json(
       {
+        channelUrl:
+          error instanceof TelegramSubscriptionRequiredError
+            ? error.channelUrl
+            : undefined,
         code,
         ok: false,
         message,

@@ -2,6 +2,7 @@
 
 export type TelegramSendErrorCode =
   | "BOT_CHAT_NOT_STARTED"
+  | "SUBSCRIPTION_REQUIRED"
   | "TELEGRAM_SEND_FAILED";
 
 export type TelegramSendResponse =
@@ -11,6 +12,7 @@ export type TelegramSendResponse =
     }
   | {
       code?: TelegramSendErrorCode;
+      channelUrl?: string;
       message: string;
       ok: false;
       startUrl?: string;
@@ -82,6 +84,10 @@ export function getTelegramSendErrorCopy(
 ) {
   if (payload.code === "BOT_CHAT_NOT_STARTED") {
     return "Press START BOT once, then return to ASCII and export again.";
+  }
+
+  if (payload.code === "SUBSCRIPTION_REQUIRED") {
+    return "Subscribe to the channel, then return to ASCIILOGRAPH and try again.";
   }
 
   return payload.message || fallback;
