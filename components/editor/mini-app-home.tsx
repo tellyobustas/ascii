@@ -131,7 +131,7 @@ function AccessPanel({
 
   return (
     <section className="terminal-scanlines mt-3 bg-black/58 p-3 backdrop-blur-[1px]">
-      <div className="border border-ascii-green/28 bg-black/72 p-4">
+      <div className="bg-black/72 p-4">
         <p className="text-[0.62rem] uppercase tracking-[0.18em] text-ascii-green/72">
           access gate
         </p>
@@ -276,7 +276,7 @@ export function MiniAppHome() {
           <>
             <nav
               aria-label="ASCIILOGRAPH generator mode"
-              className="mt-3 grid grid-cols-3 border border-ascii-green/30 bg-black/72"
+              className="mt-3 grid grid-cols-3 bg-black/72"
             >
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;

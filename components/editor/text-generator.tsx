@@ -561,8 +561,8 @@ export function TextGenerator() {
           aspectRatio: activeCanvas.width + " / " + activeCanvas.height,
         }}
       >
-        <div className="absolute inset-[7%] border border-dashed border-ascii-green/25" />
-        <div className="absolute left-2 top-2 border border-ascii-green/25 bg-black/80 px-2 py-1 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
+        <div className="absolute inset-[7%] bg-ascii-green/5" />
+        <div className="absolute left-2 top-2 bg-black/80 px-2 py-1 text-[0.58rem] uppercase tracking-[0.14em] text-ascii-white/45">
           {activeCanvas.shortLabel} safe area
         </div>
 
@@ -600,13 +600,13 @@ export function TextGenerator() {
       ) : null}
 
       {videoResult && !videoResult.ok ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {videoResult.message}
         </div>
       ) : null}
 
       {sendError ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {sendError}
           {sendHelpUrl ? (
             <button
@@ -621,7 +621,7 @@ export function TextGenerator() {
       ) : null}
 
       {textPostError ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {textPostError}
         </div>
       ) : null}

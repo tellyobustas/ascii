@@ -399,7 +399,7 @@ export function VideoGenerator() {
             <span>{isRenderingVideo ? "rendering mp4" : "render ready"}</span>
             <span className="text-ascii-green">{renderProgress}%</span>
           </div>
-          <div className="h-2 border border-ascii-green/30 bg-black">
+          <div className="h-2 bg-black">
             <div
               className="h-full bg-ascii-green shadow-[0_0_16px_rgba(0,255,102,0.35)] transition-[width] duration-300"
               style={{ width: `${renderProgress}%` }}
@@ -423,13 +423,13 @@ export function VideoGenerator() {
       ) : null}
 
       {error ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {error}
         </div>
       ) : null}
 
       {sendError ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {sendError}
           {sendHelpUrl ? (
             <button

@@ -746,7 +746,7 @@ export function ImageGenerator() {
                   {qualityReport.score}/100
                 </span>
               </div>
-              <div className="h-1.5 border border-ascii-green/30 bg-black">
+              <div className="h-1.5 bg-black">
                 <div
                   className="h-full bg-ascii-green"
                   style={{ width: `${qualityReport.score}%` }}
@@ -860,13 +860,13 @@ export function ImageGenerator() {
       </div>
 
       {error ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {error}
         </div>
       ) : null}
 
       {sendError ? (
-        <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+        <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
           {sendError}
           {sendHelpUrl ? (
             <button
@@ -973,7 +973,7 @@ export function ImageGenerator() {
                 <span>{isRenderingVideo ? "rendering mp4" : "mp4 ready"}</span>
                 <span className="text-ascii-green">{videoProgress}%</span>
               </div>
-              <div className="h-2 border border-ascii-green/30 bg-black">
+              <div className="h-2 bg-black">
                 <div
                   className="h-full bg-ascii-green shadow-[0_0_16px_rgba(0,255,102,0.35)] transition-[width] duration-300"
                   style={{ width: `${videoProgress}%` }}
@@ -991,13 +991,13 @@ export function ImageGenerator() {
           ) : null}
 
           {videoError ? (
-            <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+            <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
               {videoError}
             </div>
           ) : null}
 
           {videoSendError ? (
-            <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
+            <div className="bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">
               {videoSendError}
               {videoSendHelpUrl ? (
                 <button

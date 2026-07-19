@@ -4,7 +4,7 @@ type OutputPreviewProps = {
 
 export function OutputPreview({ label = "Preview" }: OutputPreviewProps) {
   return (
-    <div className="flex aspect-square items-center justify-center border border-ascii-muted/70 bg-black/70 p-4 text-center text-xs uppercase tracking-[0.16em] text-ascii-white/45">
+    <div className="flex aspect-square items-center justify-center bg-black/70 p-4 text-center text-xs uppercase tracking-[0.16em] text-ascii-white/45">
       {label}
     </div>
   );
