@@ -66,6 +66,8 @@ ASCII — Telegram Mini App и Telegram Bot для генераторов тек
 - `REQUIRED_CHANNEL_ID=-1001234567890` для приватного канала.
 - `REQUIRED_CHANNEL_URL=https://t.me/your_channel` или invite link для кнопки SUBSCRIBE.
 - `REQUIRED_CHANNEL_TITLE=@your_channel` для текста в боте и Mini App.
+- `NEXT_PUBLIC_REQUIRED_CHANNEL_URL=https://t.me/your_channel` для кнопки SUBSCRIBE прямо на gate screen.
+- `NEXT_PUBLIC_REQUIRED_CHANNEL_TITLE=@your_channel` для подписи канала на gate screen.
 
 Бот должен быть админом канала, иначе Telegram Bot API может не дать проверить подписку через `getChatMember`.
 

@@ -13,6 +13,10 @@ import {
 const tabs = ["TEXT", "IMAGE", "VIDEO"] as const;
 const BRAND = "ASCIILOGRAPH";
 const GLITCH_GLYPHS = "#$%*+/\\<>[]{}01";
+const PUBLIC_REQUIRED_CHANNEL_URL =
+  process.env.NEXT_PUBLIC_REQUIRED_CHANNEL_URL ?? "";
+const PUBLIC_REQUIRED_CHANNEL_TITLE =
+  process.env.NEXT_PUBLIC_REQUIRED_CHANNEL_TITLE ?? "";
 
 type TabName = (typeof tabs)[number];
 type AccessStatus = "checking" | "granted" | "locked" | "telegram-required";
@@ -123,7 +127,6 @@ function AccessPanel({
   onRetry: () => void;
   status: AccessStatus;
 }) {
-  const isChecking = status === "checking";
   const isTelegramRequired = status === "telegram-required";
 
   return (
@@ -133,7 +136,7 @@ function AccessPanel({
           access gate
         </p>
         <h2 className="mt-3 text-xl font-black uppercase leading-tight text-ascii-green">
-          {isChecking
+          {status === "checking"
             ? "checking access"
             : isTelegramRequired
               ? "open in telegram"
@@ -161,11 +164,10 @@ function AccessPanel({
           ) : null}
           <button
             className="min-h-12 border border-ascii-green/72 bg-black/65 px-4 text-xs font-black uppercase tracking-[0.14em] text-ascii-green disabled:opacity-45"
-            disabled={isChecking}
             onClick={onRetry}
             type="button"
           >
-            {isChecking ? "checking" : "check"}
+            {status === "checking" ? "check again" : "check"}
           </button>
         </div>
       </div>
@@ -178,8 +180,8 @@ export function MiniAppHome() {
   const [accessStatus, setAccessStatus] = useState<AccessStatus>("checking");
   const [accessMessage, setAccessMessage] = useState("Checking Telegram access...");
   const [requiredChannel, setRequiredChannel] = useState({
-    title: "",
-    url: "",
+    title: PUBLIC_REQUIRED_CHANNEL_TITLE,
+    url: PUBLIC_REQUIRED_CHANNEL_URL,
   });
 
   const validateAccess = async () => {
@@ -315,8 +317,8 @@ export function MiniAppHome() {
           </>
         ) : (
           <AccessPanel
-            channelTitle={requiredChannel.title}
-            channelUrl={requiredChannel.url}
+            channelTitle={requiredChannel.title || PUBLIC_REQUIRED_CHANNEL_TITLE}
+            channelUrl={requiredChannel.url || PUBLIC_REQUIRED_CHANNEL_URL}
             message={accessMessage}
             onRetry={() => void validateAccess()}
             status={accessStatus}
