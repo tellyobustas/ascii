@@ -65,8 +65,6 @@ type ImageQualityReport = {
     detail: number;
     dimensions: string;
   };
-  recommendation: string;
-  recommendedPresetId: ImageAsciiPresetId;
   score: number;
   tone: string;
   verdict: string;
@@ -154,7 +152,6 @@ async function analyzeImageQuality(
   const pixels = context.getImageData(0, 0, width, height).data;
   const lumas = new Array<number>(width * height);
   let lumaSum = 0;
-  let colorSum = 0;
   let darkPixels = 0;
   let lightPixels = 0;
 
@@ -167,7 +164,6 @@ async function analyzeImageQuality(
 
     lumas[pixelIndex] = luma;
     lumaSum += luma;
-    colorSum += Math.max(red, green, blue) - Math.min(red, green, blue);
 
     if (luma < 24) darkPixels += 1;
     if (luma > 232) lightPixels += 1;
@@ -194,7 +190,6 @@ async function analyzeImageQuality(
 
   const detail = edgeSamples > 0 ? edgeSum / edgeSamples / 255 : 0;
   const clipping = (darkPixels + lightPixels) / pixelCount;
-  const colorfulness = colorSum / pixelCount;
   const shortSide = Math.min(sourceWidth, sourceHeight);
   const aspectRatio = sourceWidth / Math.max(1, sourceHeight);
   const warnings: string[] = [];
@@ -207,21 +202,21 @@ async function analyzeImageQuality(
   }
   if (contrast < 26) {
     score -= 28;
-    warnings.push("low contrast: use FLOYD or edit contrast first");
+    warnings.push("low contrast: increase contrast before rendering");
   } else if (contrast < 40) {
     score -= 12;
-    warnings.push("soft contrast: FLOYD keeps gradients cleaner");
+    warnings.push("soft contrast: crop closer or increase contrast");
   }
   if (brightness < 48) {
     score -= 18;
-    warnings.push("dark source: MATRIX or MONO will read better");
+    warnings.push("dark source: brighten the subject before rendering");
   } else if (brightness > 210) {
     score -= 16;
     warnings.push("bright source: crop away white background");
   }
   if (clipping > 0.55) {
     score -= 20;
-    warnings.push("large flat areas: BLOCKS or MONO will be cleaner");
+    warnings.push("large flat areas: crop closer to the subject");
   } else if (clipping > 0.35) {
     score -= 9;
   }
@@ -230,40 +225,23 @@ async function analyzeImageQuality(
     warnings.push("low detail: crop closer to the subject");
   } else if (detail > 0.24) {
     score -= 8;
-    warnings.push("busy detail: crop tighter or use BAYER");
+    warnings.push("busy detail: crop tighter to simplify the frame");
   }
   if (aspectRatio > 2.2 || aspectRatio < 0.45) {
     score -= 7;
     warnings.push("wide/tall frame: square crop will render stronger");
   }
 
-  let recommendedPresetId: ImageAsciiPresetId = "brailleColor";
-  let recommendation = "BRAILLE COLOR should preserve detail and color best.";
   let tone = "good source";
 
   if (contrast < 30 || detail < 0.04) {
-    recommendedPresetId = "floydSteinberg";
-    recommendation = "FLOYD rescues soft gradients and low detail.";
     tone = "soft / low contrast";
   } else if (clipping > 0.42 && detail > 0.055) {
-    recommendedPresetId = colorfulness > 34 ? "blocks" : "brailleMono";
-    recommendation =
-      colorfulness > 34
-        ? "BLOCKS keeps the strong silhouette readable."
-        : "MONO keeps hard edges clean without color noise.";
     tone = "logo / silhouette";
   } else if (brightness < 62) {
-    recommendedPresetId = "matrixAscii";
-    recommendation = "MATRIX makes dark sources survive in green terminal mode.";
     tone = "dark source";
   } else if (detail > 0.2) {
-    recommendedPresetId = "bayerDither";
-    recommendation = "BAYER calms busy texture with stable ordered dither.";
     tone = "busy detail";
-  } else if (colorfulness < 18) {
-    recommendedPresetId = "brailleMono";
-    recommendation = "MONO is cleaner for low-color images.";
-    tone = "low color";
   }
 
   const qualityScore = clampScore(score);
@@ -271,7 +249,7 @@ async function analyzeImageQuality(
     qualityScore >= 82
       ? "excellent for ascii"
       : qualityScore >= 64
-        ? "good with suggested preset"
+        ? "good source"
         : qualityScore >= 44
           ? "needs crop or contrast"
           : "weak source for ascii";
@@ -284,8 +262,6 @@ async function analyzeImageQuality(
       detail: Math.round(detail * 100),
       dimensions: `${sourceWidth}x${sourceHeight}`,
     },
-    recommendation,
-    recommendedPresetId,
     score: qualityScore,
     tone,
     verdict,
@@ -782,38 +758,6 @@ export function ImageGenerator() {
                   {qualityReport.tone}
                 </span>
               </div>
-              <div className="bg-black/35 px-2 py-2 text-ascii-white/68">
-                best:{" "}
-                <span className="text-ascii-green">
-                  {
-                    IMAGE_ASCII_PRESETS[qualityReport.recommendedPresetId]
-                      .shortLabel
-                  }
-                </span>{" "}
-                / {qualityReport.recommendation}
-              </div>
-              {qualityReport.recommendedPresetId !== presetId ? (
-                <button
-                  className="min-h-9 w-full border border-ascii-green/45 bg-black px-3 text-xs font-black uppercase tracking-[0.1em] text-ascii-green transition hover:bg-ascii-green hover:text-black"
-                  onClick={() => {
-                    setPresetId(qualityReport.recommendedPresetId);
-                    setResult(null);
-                    setError("");
-                    setSendError("");
-                    setSendHelpUrl("");
-                    setSendStatus("send to telegram");
-                    resetImageVideo();
-                    setStatus(file ? "style changed" : "idle");
-                  }}
-                  type="button"
-                >
-                  apply{" "}
-                  {
-                    IMAGE_ASCII_PRESETS[qualityReport.recommendedPresetId]
-                      .shortLabel
-                  }
-                </button>
-              ) : null}
               <div className="text-ascii-white/42">
                 {qualityReport.metrics.dimensions} / contrast{" "}
                 {qualityReport.metrics.contrast} / detail{" "}
