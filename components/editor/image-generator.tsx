@@ -513,6 +513,18 @@ export function ImageGenerator() {
           imageBase64: result.image.base64,
           initData,
           mimeType: result.image.mimeType,
+          receipt: {
+            generator: "IMAGE",
+            parameters: [
+              `mode / ${activePreset.mode}`,
+              `width / ${activePreset.outputWidth} chars`,
+              `contrast / ${activePreset.contrast}`,
+              `density / ${activePreset.density}`,
+              `source / ${result.image.width}x${result.image.height}px`,
+            ],
+            preset: activePreset.label,
+            renderId: "",
+          },
           resultType: "imagePng",
         }),
         headers: {
@@ -586,6 +598,18 @@ export function ImageGenerator() {
           fileName: videoResult.video.fileName,
           initData,
           mimeType: videoResult.video.mimeType,
+          receipt: {
+            generator: "IMAGE",
+            parameters: [
+              "mode / image glitch video",
+              `preset / ${activePreset.shortLabel}`,
+              `fps / ${videoResult.video.fps}`,
+              `size / ${videoResult.video.width}x${videoResult.video.height}px`,
+              `frames / ${videoResult.video.renderedFrames}`,
+            ],
+            preset: `${activePreset.label} GLITCH`,
+            renderId: "",
+          },
           resultType: "videoMp4",
           videoBase64: videoResult.video.base64,
         }),

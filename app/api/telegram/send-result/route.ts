@@ -4,6 +4,7 @@ import {
   TelegramSubscriptionRequiredError,
 } from "@/lib/telegram/subscription";
 import { validateTelegramInitData } from "@/lib/telegram/validate-init-data";
+import { renderReceiptPng, type RenderReceipt } from "@/lib/ascii/render-receipt";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ type TelegramSendResultRequest = {
   initData?: string;
   mimeType?: string;
   resultType?: ResultType;
+  receipt?: RenderReceipt;
   videoBase64?: string;
 };
 
@@ -93,6 +95,25 @@ function normalizeResultType(resultType?: string): ResultType {
   }
 
   throw new Error("Unsupported result type.");
+}
+
+function createRenderId(userId: number) {
+  const date = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+  const nonce = Math.floor(Math.random() * 9000 + 1000);
+  return `R-${date}-${String(userId).slice(-4)}-${nonce}`;
+}
+
+function normalizeReceipt(receipt: RenderReceipt | undefined, userId: number) {
+  if (!receipt || (receipt.generator !== "IMAGE" && receipt.generator !== "VIDEO")) {
+    return null;
+  }
+
+  return {
+    generator: receipt.generator,
+    parameters: Array.isArray(receipt.parameters) ? receipt.parameters.filter((value): value is string => typeof value === "string") : [],
+    preset: typeof receipt.preset === "string" ? receipt.preset : "UNKNOWN PRESET",
+    renderId: typeof receipt.renderId === "string" && receipt.renderId ? receipt.renderId : createRenderId(userId),
+  } satisfies RenderReceipt;
 }
 
 async function callTelegramMultipart(
@@ -285,6 +306,19 @@ export async function POST(request: Request) {
             ? "ascii-animation.mp4"
             : "ascii-text-glitch.mp4",
         mimeType: body.mimeType === "video/mp4" ? body.mimeType : "video/mp4",
+        token,
+      });
+    }
+
+    const receipt = normalizeReceipt(body.receipt, session.userId);
+    if (receipt) {
+      const receiptPng = await renderReceiptPng(receipt);
+      await sendImageResult({
+        buffer: receiptPng,
+        caption: `ASCIILOGRAPH render receipt / ${receipt.renderId}`,
+        chatId: session.userId,
+        fileName: "asciilograph-render-receipt.png",
+        mimeType: "image/png",
         token,
       });
     }
