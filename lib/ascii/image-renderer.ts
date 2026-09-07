@@ -2,6 +2,7 @@ import sharp from "sharp";
 import {
   BRAILLE_DOT_MAP,
   BRAILLE_UNICODE_OFFSET,
+  ASCII_RENDER_CELL_ASPECT_RATIO,
   IMAGE_ASCII_PRESETS,
   IMAGE_CHARACTER_SETS,
   IMAGE_LIMITS,
@@ -35,6 +36,8 @@ export type RenderedAsciiImage = {
 
 export type PreparedAsciiImageFrame = {
   asciiText: string;
+  canvasColumns: number;
+  canvasRows: number;
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
   presetId: ImageAsciiPresetId;
@@ -494,17 +497,19 @@ function ditherToChars(
 }
 
 function renderBrailleSvg(options: {
+  canvasColumns: number;
+  canvasRows: number;
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
   overlay?: string;
   preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
 }) {
-  const maxColumns = Math.max(...options.lines.map((line) => line.length), 1);
+  const maxColumns = Math.max(options.canvasColumns, 1);
   const cellWidth = Math.max(5.8, Math.min(9.5, 900 / maxColumns));
   const cellHeight = cellWidth * 1.85;
   const padding = Math.round(cellWidth * 3);
   const width = Math.ceil(maxColumns * cellWidth + padding * 2);
-  const height = Math.ceil(options.lines.length * cellHeight + padding * 2);
+  const height = Math.ceil(options.canvasRows * cellHeight + padding * 2);
   const dotRadius = cellWidth * 0.15;
   const shapes: string[] = [];
   const foreground =
@@ -570,6 +575,8 @@ function renderBrailleSvg(options: {
 }
 
 function renderAsciiSvg(options: {
+  canvasColumns: number;
+  canvasRows: number;
   colors?: Array<Array<Rgb | undefined>>;
   lines: string[];
   overlay?: string;
@@ -579,13 +586,13 @@ function renderAsciiSvg(options: {
     return renderBrailleSvg(options);
   }
 
-  const maxColumns = Math.max(...options.lines.map((line) => line.length), 1);
+  const maxColumns = Math.max(options.canvasColumns, 1);
   const fontSize = Math.max(7, Math.min(15, Math.floor(940 / maxColumns)));
   const charWidth = fontSize * 0.62;
   const lineHeight = fontSize * 1.12;
   const padding = Math.round(fontSize * 2.2);
   const width = Math.ceil(maxColumns * charWidth + padding * 2);
-  const height = Math.ceil(options.lines.length * lineHeight + padding * 2);
+  const height = Math.ceil(options.canvasRows * lineHeight + padding * 2);
   const foreground =
     String(options.preset.mode) === "white-terminal" ? "#f2f2f2" : "#00ff66";
   const shapes: string[] = [];
@@ -660,6 +667,8 @@ export async function prepareImageAsciiFrame(
 
   let lines: string[];
   let colors: Array<Array<Rgb | undefined>> | undefined;
+  let canvasColumns: number;
+  let canvasRows: number;
 
   if (preset.mode === "blocks-braille") {
     const raster = calculateBrailleRasterSize(requestedWidth, aspectRatio);
@@ -671,19 +680,27 @@ export async function prepareImageAsciiFrame(
     const rendered = renderBrailleText(pixels, preset, invert);
     lines = rendered.lines;
     colors = preset.litPixelColorSampling ? rendered.colors : undefined;
+    canvasColumns = raster.characterWidth;
+    canvasRows = raster.characterHeight;
   } else {
     const characterWidth = requestedWidth;
     const characterHeight = Math.max(
       8,
-      Math.round(characterWidth * aspectRatio * 0.5),
+      Math.round(
+        characterWidth * aspectRatio / ASCII_RENDER_CELL_ASPECT_RATIO,
+      ),
     );
     const pixels = await readResizedPixels(input, characterWidth, characterHeight);
     const lumas = Array.from(pixels.grayscale);
     lines = ditherToChars(lumas, pixels.width, pixels.height, preset, invert);
+    canvasColumns = pixels.width;
+    canvasRows = pixels.height;
   }
 
   return {
     asciiText: lines.join("\n"),
+    canvasColumns,
+    canvasRows,
     colors,
     lines,
     presetId,
@@ -697,6 +714,8 @@ export function renderAsciiFrameToSvg(
   const preset = IMAGE_ASCII_PRESETS[frame.presetId];
 
   return renderAsciiSvg({
+    canvasColumns: frame.canvasColumns,
+    canvasRows: frame.canvasRows,
     colors: frame.colors,
     lines: frame.lines,
     overlay: options.overlay,

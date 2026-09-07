@@ -20,6 +20,10 @@ export const IMAGE_LIMITS = {
 } as const;
 
 export const BRAILLE_UNICODE_OFFSET = 0x2800;
+// These values mirror the physical cell proportions used by image-renderer.
+// Sampling needs to account for them, otherwise a source image is stretched.
+export const ASCII_RENDER_CELL_ASPECT_RATIO = 1.12 / 0.62;
+export const BRAILLE_RENDER_CELL_ASPECT_RATIO = 1.85;
 
 export const BRAILLE_DOT_MAP = [
   [0x01, 0x08],
@@ -230,7 +234,10 @@ export function calculateBrailleRasterSize(
     10,
     Math.min(IMAGE_LIMITS.maxAsciiWidth, Math.round(characterWidth)),
   );
-  const characterHeight = Math.max(1, Math.round(width * sourceAspectRatio * 0.5));
+  const characterHeight = Math.max(
+    1,
+    Math.round(width * sourceAspectRatio / BRAILLE_RENDER_CELL_ASPECT_RATIO),
+  );
 
   return {
     characterHeight,
