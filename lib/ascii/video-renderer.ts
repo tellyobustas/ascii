@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ffmpegPath from "ffmpeg-static";
 import { renderImageToAsciiPng } from "@/lib/ascii/image-renderer";
 import {
   VIDEO_ASCII_PRESETS,
@@ -37,9 +38,11 @@ const VIDEO_TO_IMAGE_PRESET: Record<VideoAsciiPresetId, string> = {
 };
 
 function getFfmpegPath() {
-  return process.platform === "win32"
-    ? "node_modules/ffmpeg-static/ffmpeg.exe"
-    : "node_modules/ffmpeg-static/ffmpeg";
+  if (!ffmpegPath) {
+    throw new Error("FFmpeg binary is unavailable in this deployment.");
+  }
+
+  return ffmpegPath;
 }
 
 type FfmpegResult = {

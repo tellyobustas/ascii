@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 import {
   MURMURATION_GLYPHS,
@@ -44,9 +45,11 @@ function escapeXml(value: string) {
 }
 
 function getFfmpegPath() {
-  return process.platform === "win32"
-    ? "node_modules/ffmpeg-static/ffmpeg.exe"
-    : "node_modules/ffmpeg-static/ffmpeg";
+  if (!ffmpegPath) {
+    throw new Error("FFmpeg binary is unavailable in this deployment.");
+  }
+
+  return ffmpegPath;
 }
 
 function runFfmpeg(args: string[], cwd: string) {

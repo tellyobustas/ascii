@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 import {
   cleanText,
@@ -52,9 +53,11 @@ type FfmpegResult = {
 };
 
 function getFfmpegPath() {
-  return process.platform === "win32"
-    ? "node_modules/ffmpeg-static/ffmpeg.exe"
-    : "node_modules/ffmpeg-static/ffmpeg";
+  if (!ffmpegPath) {
+    throw new Error("FFmpeg binary is unavailable in this deployment.");
+  }
+
+  return ffmpegPath;
 }
 
 function errorOutputToString(error: unknown, field: "stderr" | "stdout") {
