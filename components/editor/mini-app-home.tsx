@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AsciilographMark } from "@/components/editor/asciilograph-mark";
 import { ImageGenerator } from "@/components/editor/image-generator";
+import { MurmurationGenerator } from "@/components/editor/murmuration-generator";
 import { TextGenerator } from "@/components/editor/text-generator";
 import { VideoGenerator } from "@/components/editor/video-generator";
 import {
@@ -10,7 +11,7 @@ import {
   loadTelegramWebAppSdk,
 } from "@/lib/telegram/client-export";
 
-const tabs = ["TEXT", "IMAGE", "VIDEO"] as const;
+const tabs = ["TEXT", "IMAGE", "VIDEO", "MURMURATION"] as const;
 const BRAND = "ASCIILOGRAPH";
 const GLITCH_GLYPHS = "#$%*+/\\<>[]{}01";
 const PUBLIC_REQUIRED_CHANNEL_URL =
@@ -276,7 +277,7 @@ export function MiniAppHome() {
           <>
             <nav
               aria-label="ASCIILOGRAPH generator mode"
-              className="mt-3 grid grid-cols-3 bg-black/72"
+              className="mt-3 grid grid-cols-4 bg-black/72"
             >
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;
@@ -313,6 +314,7 @@ export function MiniAppHome() {
               {activeTab === "TEXT" ? <TextGenerator /> : null}
               {activeTab === "IMAGE" ? <ImageGenerator /> : null}
               {activeTab === "VIDEO" ? <VideoGenerator /> : null}
+              {activeTab === "MURMURATION" ? <MurmurationGenerator /> : null}
             </section>
           </>
         ) : (
