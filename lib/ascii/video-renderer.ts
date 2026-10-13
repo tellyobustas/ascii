@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import { renderImageToAsciiPng } from "@/lib/ascii/image-renderer";
+import { resolveFfmpegPath } from "@/lib/ascii/ffmpeg-path";
 import {
   VIDEO_ASCII_PRESETS,
   VIDEO_RENDER_LIMITS,
@@ -38,11 +39,7 @@ const VIDEO_TO_IMAGE_PRESET: Record<VideoAsciiPresetId, string> = {
 };
 
 function getFfmpegPath() {
-  if (!ffmpegPath) {
-    throw new Error("FFmpeg binary is unavailable in this deployment.");
-  }
-
-  return ffmpegPath;
+  return resolveFfmpegPath(ffmpegPath);
 }
 
 type FfmpegResult = {

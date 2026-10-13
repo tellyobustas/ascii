@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
+import { resolveFfmpegPath } from "@/lib/ascii/ffmpeg-path";
 import {
   BRAILLE_UNICODE_OFFSET,
   IMAGE_ASCII_PRESETS,
@@ -50,11 +51,7 @@ type FfmpegResult = {
 };
 
 function getFfmpegPath() {
-  if (!ffmpegPath) {
-    throw new Error("FFmpeg binary is unavailable in this deployment.");
-  }
-
-  return ffmpegPath;
+  return resolveFfmpegPath(ffmpegPath);
 }
 
 function errorOutputToString(error: unknown, field: "stderr" | "stdout") {
