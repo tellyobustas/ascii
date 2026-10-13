@@ -5,8 +5,13 @@ import { GenerateButton } from "@/components/editor/generate-button";
 import { PresetButton } from "@/components/editor/preset-button";
 import { StatusPill } from "@/components/editor/status-pill";
 import {
-  MURMURATION_GLYPHS,
+  buildMurmurationCells,
+  getMurmurationGridSize,
+  getMurmurationMotion,
+  MURMURATION_LIMITS,
   MURMURATION_STYLES,
+  type MurmurationCell,
+  type MurmurationGridSize,
   type MurmurationStyleId,
 } from "@/lib/ascii/murmuration";
 import {
@@ -17,7 +22,7 @@ import {
   type TelegramSendResponse,
 } from "@/lib/telegram/client-export";
 
-type Point = { alpha: number; glyph: string; homeX: number; homeY: number; phase: number; size: number; vx: number; vy: number };
+type PreviewMap = { cells: MurmurationCell[]; size: MurmurationGridSize };
 type RenderResponse =
   | { ok: true; durationSeconds: number; fileName: string; styleId: MurmurationStyleId; video: { base64: string; fileName: string; mimeType: "video/mp4" } }
   | { ok: false; message: string };
@@ -26,60 +31,45 @@ const styleEntries = Object.entries(MURMURATION_STYLES) as Array<
   [MurmurationStyleId, (typeof MURMURATION_STYLES)[MurmurationStyleId]]
 >;
 
-function random(seed: number) {
-  const value = Math.sin(seed * 12.9898) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-async function pointsFromFile(file: File, maxSize: number) {
+async function mapPortrait(file: File): Promise<PreviewMap> {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(maxSize / bitmap.width, maxSize / bitmap.height, 1);
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const size = getMurmurationGridSize(bitmap.width, bitmap.height);
   const source = document.createElement("canvas");
-  source.width = width;
-  source.height = height;
+  source.width = size.columns;
+  source.height = size.rows;
   const context = source.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("Canvas is unavailable.");
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-  const pixels = context.getImageData(0, 0, width, height).data;
-  const points: Point[] = [];
-  const step = Math.max(4, Math.round(Math.sqrt((width * height) / 520)));
-  const seed = Date.now() % 10000;
-  for (let y = 0; y < height; y += step) {
-    for (let x = 0; x < width; x += step) {
-      const offset = (y * width + x) * 4;
-      const luma = (pixels[offset] * 0.2126 + pixels[offset + 1] * 0.7152 + pixels[offset + 2] * 0.0722) / 255;
-      const chance = 0.16 + luma * 0.84;
-      const localSeed = seed + x * 0.17 + y * 17.1;
-      if (random(localSeed) > chance) continue;
-      points.push({
-        alpha: 0.2 + luma * 0.72,
-        glyph: MURMURATION_GLYPHS[Math.min(MURMURATION_GLYPHS.length - 1, Math.floor(luma * MURMURATION_GLYPHS.length))] ?? "+",
-        homeX: x / width,
-        homeY: y / height,
-        phase: random(localSeed + 1) * Math.PI * 2,
-        size: 7 + luma * 8 + random(localSeed + 2) * 3,
-        vx: (random(localSeed + 3) - 0.5) * 2,
-        vy: (random(localSeed + 4) - 0.5) * 2,
-      });
-    }
+  if (!context) {
+    bitmap.close();
+    throw new Error("Canvas is unavailable.");
   }
-  return points.slice(0, 600);
+  context.drawImage(bitmap, 0, 0, size.columns, size.rows);
+  bitmap.close();
+  const rgba = context.getImageData(0, 0, size.columns, size.rows).data;
+  const gray = new Uint8Array(size.columns * size.rows);
+  for (let index = 0; index < gray.length; index += 1) {
+    const offset = index * 4;
+    gray[index] = Math.round(
+      rgba[offset] * 0.2126 + rgba[offset + 1] * 0.7152 + rgba[offset + 2] * 0.0722,
+    );
+  }
+  return { cells: buildMurmurationCells(gray, size.columns, size.rows), size };
 }
 
 function MurmurationPreview({ file, style }: { file: File | null; style: MurmurationStyleId }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [points, setPoints] = useState<Point[]>([]);
+  const [map, setMap] = useState<PreviewMap | null>(null);
+  const [mapError, setMapError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     if (!file) return;
-    pointsFromFile(file, 320).then((nextPoints) => {
-      if (!cancelled) setPoints(nextPoints);
+    mapPortrait(file).then((nextMap) => {
+      if (!cancelled) {
+        setMapError("");
+        setMap(nextMap);
+      }
     }).catch(() => {
-      if (!cancelled) setPoints([]);
+      if (!cancelled) setMapError("Could not map this portrait.");
     });
     return () => { cancelled = true; };
   }, [file]);
@@ -89,53 +79,75 @@ function MurmurationPreview({ file, style }: { file: File | null; style: Murmura
     if (!canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
-    let frame = 0;
     let animationFrame = 0;
+    let previousFrame = 0;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const ratio = map ? map.size.width / map.size.height : 0.8;
       canvas.width = Math.round(rect.width * dpr);
-      canvas.height = Math.round(rect.height * dpr);
+      canvas.height = Math.round((rect.width / ratio) * dpr);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvas.style.height = `${rect.width / ratio}px`;
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
 
     const draw = (time: number) => {
+      if (!reducedMotion && time - previousFrame < 32) {
+        animationFrame = requestAnimationFrame(draw);
+        return;
+      }
+      previousFrame = time;
       const rect = canvas.getBoundingClientRect();
       const { width, height } = rect;
-      context.fillStyle = "rgba(0,0,0,0.32)";
+      context.fillStyle = "#000000";
       context.fillRect(0, 0, width, height);
-      const now = reducedMotion ? 0.4 : time / 1000;
-      const intensity = MURMURATION_STYLES[style].intensity;
+      const progress = reducedMotion ? 0.12 : (time % 4000) / 4000;
+      const scaleX = width / (map?.size.width ?? width);
+      const scaleY = height / (map?.size.height ?? height);
       context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.shadowBlur = 8;
+      context.textBaseline = "alphabetic";
+      context.font = `${(map?.size.fontSize ?? 16) * scaleY}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      context.shadowBlur = 2.5 * scaleY;
       context.shadowColor = MURMURATION_STYLES[style].color;
-      for (let index = 0; index < points.length; index += 1) {
-        const point = points[index];
-        const wave = Math.sin(now * 2.1 + point.phase);
-        const curl = Math.cos(now * 1.7 + point.phase * 1.8);
-        const burst = style === "shatter" && Math.sin(now * 4) > 0.78 && index % 13 === 0 ? 24 : 0;
-        const x = point.homeX * width + wave * (8 + intensity * 8) * point.vx + burst * point.vx;
-        const y = point.homeY * height + curl * (8 + intensity * 8) * point.vy + burst * point.vy;
-        context.font = `${point.size}px ui-monospace, monospace`;
+      if (map) {
+        for (const cell of map.cells) {
+          const motion = getMurmurationMotion(cell, progress, style);
+          const x = map.size.paddingX + (cell.column + 0.5 + motion.dx) * map.size.cellWidth;
+          const y = map.size.paddingY + (cell.row + 0.82 + motion.dy) * map.size.cellHeight;
+          context.globalAlpha = Math.min(0.98, 0.28 + motion.opacity * 0.68);
+          context.fillStyle = MURMURATION_STYLES[style].color;
+          context.fillText(motion.glyph, x * scaleX, y * scaleY);
+        }
+      } else {
+        context.font = `${12 * scaleY}px ui-monospace, monospace`;
+        context.globalAlpha = 0.32;
         context.fillStyle = MURMURATION_STYLES[style].color;
-        context.globalAlpha = Math.max(0.12, point.alpha * (0.72 + wave * 0.2));
-        context.fillText(point.glyph, x, y);
+        context.fillText(file ? "MAPPING PORTRAIT" : "SELECT PORTRAIT", width / 2, height / 2);
       }
       context.globalAlpha = 1;
       context.shadowBlur = 0;
-      frame += 1;
-      if (!reducedMotion || frame < 2) animationFrame = requestAnimationFrame(draw);
+      context.fillStyle = "rgba(255,255,255,0.035)";
+      for (let y = 0; y < height; y += 7) context.fillRect(0, y, width, 1);
+      if (!reducedMotion) animationFrame = requestAnimationFrame(draw);
     };
     animationFrame = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(animationFrame); observer.disconnect(); };
-  }, [points, style]);
+  }, [file, map, style]);
 
-  return <canvas aria-label="Live murmuration portrait preview" className="aspect-square w-full bg-black" ref={canvasRef} />;
+  return (
+    <div className="bg-black">
+      <canvas
+        aria-label="Live murmuration portrait preview"
+        className="block w-full bg-black"
+        ref={canvasRef}
+      />
+      {mapError ? <p className="px-3 py-2 text-xs uppercase text-red-300">{mapError}</p> : null}
+    </div>
+  );
 }
 
 export function MurmurationGenerator() {
@@ -149,6 +161,7 @@ export function MurmurationGenerator() {
   const [sendHelpUrl, setSendHelpUrl] = useState("");
 
   const resultUrl = result?.ok ? `data:${result.video.mimeType};base64,${result.video.base64}` : "";
+  const maxFileMegabytes = MURMURATION_LIMITS.maxFileBytes / 1024 / 1024;
   const renderPortrait = async () => {
     if (!file) return;
     setStatus("rendering 4 sec");
@@ -211,18 +224,43 @@ export function MurmurationGenerator() {
 
   return (
     <div className="mt-4 space-y-3">
-      <p className="text-xs leading-5 text-ascii-white/58">Your image becomes a living cloud of symbols. The portrait never disappears: it drifts, glitches, and reforms.</p>
+      <p className="text-xs leading-5 text-ascii-white/58">A readable ASCII portrait moves as one flock. The shape stays recognizable while the signal flows through it.</p>
       <div className="grid grid-cols-3 gap-2">
         {styleEntries.map(([id, preset]) => <PresetButton active={id === style} key={id} onClick={() => { setStyle(id); setResult(null); setStatus(file ? "style changed" : "load portrait"); }}>{preset.shortLabel}</PresetButton>)}
       </div>
       <label className="flex min-h-24 cursor-pointer items-center justify-center border border-dashed border-ascii-green/40 bg-black/70 px-5 text-center text-sm uppercase tracking-[0.12em] text-ascii-white/65 transition hover:border-ascii-green hover:text-ascii-green">
-        <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const next = event.target.files?.[0] ?? null; setFile(next); setResult(null); setError(""); setSendError(""); setSendHelpUrl(""); setSendStatus("send to telegram"); setStatus(next ? "portrait mapped" : "load portrait"); }} type="file" />
-        {file ? "portrait mapped / tap to replace" : "drop / select portrait"}
+        <input
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          onChange={(event) => {
+            const next = event.target.files?.[0] ?? null;
+            if (next && next.size > MURMURATION_LIMITS.maxFileBytes) {
+              setFile(null);
+              setResult(null);
+              setStatus("file too large");
+              setError(`Portrait must be ${maxFileMegabytes} MB or smaller.`);
+              event.target.value = "";
+              return;
+            }
+            setFile(next);
+            setResult(null);
+            setError("");
+            setSendError("");
+            setSendHelpUrl("");
+            setSendStatus("send to telegram");
+            setStatus(next ? "portrait mapped" : "load portrait");
+          }}
+          type="file"
+        />
+        <span className="space-y-2">
+          <span className="block">{file ? "portrait mapped / tap to replace" : "drop / select portrait"}</span>
+          <span className="block text-[0.62rem] text-ascii-white/42">JPG PNG WEBP / MAX {maxFileMegabytes} MB</span>
+        </span>
       </label>
       <div className="overflow-hidden bg-black">
         <MurmurationPreview key={file ? `${file.name}-${file.lastModified}` : "empty"} file={file} style={style} />
       </div>
-      {resultUrl ? <video autoPlay className="aspect-square w-full bg-black object-contain" controls loop muted playsInline src={resultUrl} /> : null}
+      {resultUrl ? <video autoPlay className="w-full bg-black object-contain" controls loop muted playsInline src={resultUrl} /> : null}
       <div className="grid grid-cols-[1fr_auto] items-center gap-3"><StatusPill label={status} /><span className="text-[0.62rem] uppercase text-ascii-white/42">4 sec / silent mp4</span></div>
       {error ? <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">{error}</div> : null}
       {sendError ? <div className="border border-red-500/45 bg-black px-3 py-2 text-xs uppercase leading-5 tracking-[0.1em] text-red-300">{sendError}{sendHelpUrl ? <button className="mt-2 block min-h-9 w-full border border-red-300/70 bg-black px-3 text-xs font-black uppercase tracking-[0.12em] text-red-200" onClick={() => openBotStartUrl(sendHelpUrl)} type="button">start bot</button> : null}</div> : null}

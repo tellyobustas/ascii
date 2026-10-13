@@ -6,23 +6,16 @@ import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 import { resolveFfmpegPath } from "@/lib/ascii/ffmpeg-path";
 import {
-  MURMURATION_GLYPHS,
+  buildMurmurationCells,
+  getMurmurationGridSize,
+  getMurmurationMotion,
   MURMURATION_LIMITS,
   MURMURATION_STYLES,
   isMurmurationStyleId,
+  type MurmurationCell,
+  type MurmurationGridSize,
   type MurmurationStyleId,
 } from "@/lib/ascii/murmuration";
-
-type Point = {
-  alpha: number;
-  glyph: string;
-  homeX: number;
-  homeY: number;
-  phase: number;
-  size: number;
-  vectorX: number;
-  vectorY: number;
-};
 
 export type RenderedMurmuration = {
   durationSeconds: number;
@@ -32,12 +25,7 @@ export type RenderedMurmuration = {
   styleId: MurmurationStyleId;
 };
 
-function random(seed: number) {
-  const value = Math.sin(seed * 12.9898) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function escapeXml(value: string) {
+function xml(value: string) {
   return value.replace(/[&<>"']/g, (character) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[
       character
@@ -45,14 +33,10 @@ function escapeXml(value: string) {
   );
 }
 
-function getFfmpegPath() {
-  return resolveFfmpegPath(ffmpegPath);
-}
-
 function runFfmpeg(args: string[], cwd: string) {
   return new Promise<void>((resolve, reject) => {
     execFile(
-      getFfmpegPath(),
+      resolveFfmpegPath(ffmpegPath),
       args,
       { cwd, maxBuffer: 1024 * 1024 * 16, timeout: 1000 * 60 * 2 },
       (error, _stdout, stderr) => {
@@ -66,119 +50,112 @@ function runFfmpeg(args: string[], cwd: string) {
   });
 }
 
-function buildPoints(data: Buffer, width: number, height: number, seed: number) {
-  const points: Point[] = [];
-  const maxPoints = 820;
-  const step = Math.max(5, Math.round(Math.sqrt((width * height) / maxPoints)));
+function renderFrame(
+  cells: MurmurationCell[],
+  size: MurmurationGridSize,
+  frameIndex: number,
+  styleId: MurmurationStyleId,
+) {
+  const style = MURMURATION_STYLES[styleId];
+  const progress = frameIndex / (MURMURATION_LIMITS.durationSeconds * MURMURATION_LIMITS.fps);
+  const nodes: string[] = [];
+  const trails: string[] = [];
 
-  for (let y = 0; y < height; y += step) {
-    for (let x = 0; x < width; x += step) {
-      const index = (y * width + x) * 4;
-      const red = data[index] ?? 0;
-      const green = data[index + 1] ?? 0;
-      const blue = data[index + 2] ?? 0;
-      const alpha = (data[index + 3] ?? 255) / 255;
-      const luma = (red * 0.2126 + green * 0.7152 + blue * 0.0722) / 255;
-      const localSeed = seed + x * 0.217 + y * 13.91;
-      // A mixture of luminance and a tiny uniform base preserves faces instead of only white highlights.
-      const keepChance = (0.16 + luma * 0.84) * alpha;
+  for (let index = 0; index < cells.length; index += 1) {
+    const cell = cells[index];
+    const motion = getMurmurationMotion(cell, progress, styleId);
+    const x = size.paddingX + (cell.column + 0.5 + motion.dx) * size.cellWidth;
+    const y = size.paddingY + (cell.row + 0.82 + motion.dy) * size.cellHeight;
+    const opacity = Math.min(0.98, 0.28 + motion.opacity * 0.68);
+    nodes.push(
+      `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" opacity="${opacity.toFixed(3)}">${xml(motion.glyph)}</text>`,
+    );
 
-      if (random(localSeed) > keepChance) continue;
-
-      points.push({
-        alpha: 0.28 + luma * 0.68,
-        glyph:
-          MURMURATION_GLYPHS[
-            Math.min(
-              MURMURATION_GLYPHS.length - 1,
-              Math.floor(luma * MURMURATION_GLYPHS.length),
-            )
-          ] ?? "+",
-        homeX: x + (random(localSeed + 2) - 0.5) * step,
-        homeY: y + (random(localSeed + 3) - 0.5) * step,
-        phase: random(localSeed + 4) * Math.PI * 2,
-        size: 8 + luma * 9 + random(localSeed + 5) * 3,
-        vectorX: (random(localSeed + 6) - 0.5) * 2,
-        vectorY: (random(localSeed + 7) - 0.5) * 2,
-      });
+    // A small number of dim edge glyphs detach and rejoin the same silhouette.
+    const hash = Math.abs(Math.sin(cell.column * 127.1 + cell.row * 311.7));
+    if (cell.tone < 0.48 && hash > 0.968) {
+      const drift = Math.sin(progress * Math.PI * 2 + cell.phase);
+      const echoX = x + drift * size.cellWidth * 2.1;
+      const echoY = y - Math.cos(progress * Math.PI * 2 + cell.phase) * size.cellHeight * 1.15;
+      trails.push(
+        `<text x="${echoX.toFixed(2)}" y="${echoY.toFixed(2)}" font-size="${(size.fontSize * 0.78).toFixed(2)}" opacity="0.22">${xml(motion.glyph)}</text>`,
+      );
     }
   }
 
-  return points.sort((a, b) => a.homeY - b.homeY).slice(0, maxPoints);
-}
-
-function renderFrame(points: Point[], frameIndex: number, totalFrames: number, styleId: MurmurationStyleId) {
-  const size = MURMURATION_LIMITS.outputSize;
-  const style = MURMURATION_STYLES[styleId];
-  const time = frameIndex / Math.max(1, totalFrames - 1);
-  const breath = 0.5 + 0.5 * Math.sin(time * Math.PI * 4);
-  const intenseBurst = styleId === "shatter" && Math.sin(time * Math.PI * 6) > 0.76;
-  const particles = points.map((point, index) => {
-    const wave = Math.sin(time * 8 + point.phase);
-    const curl = Math.cos(time * 6.2 + point.phase * 1.7);
-    const edgePulse = 7 + breath * style.intensity * 13;
-    const burst = intenseBurst && index % 13 === 0 ? 42 * style.intensity : 0;
-    const x = point.homeX + wave * edgePulse * point.vectorX + curl * 3 + burst * point.vectorX;
-    const y = point.homeY + curl * edgePulse * point.vectorY + wave * 3 + burst * point.vectorY;
-    const flicker = 0.76 + Math.sin(time * 23 + point.phase) * 0.18;
-    const glyph = intenseBurst && index % 19 === 0 ? "#$%*@"[index % 5] : point.glyph;
-    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${point.size.toFixed(1)}" opacity="${Math.max(0.14, point.alpha * flicker).toFixed(2)}">${escapeXml(glyph)}</text>`;
-  }).join("");
+  const scanlines = Array.from({ length: Math.floor(size.height / 8) }, (_, index) =>
+    `<rect y="${index * 8}" width="${size.width}" height="1"/>`,
+  ).join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="#000"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">
+  <rect width="100%" height="100%" fill="#000000"/>
   <defs>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <pattern id="scan" width="1" height="7" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#ffffff" opacity=".08"/></pattern>
+    <filter id="glow" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${style.glow}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-  <g fill="${style.color}" font-family="monospace" text-anchor="middle" filter="url(#glow)">${particles}</g>
-  <rect width="100%" height="100%" fill="url(#scan)" opacity=".35"/>
+  <g fill="${style.color}" font-family="monospace" font-size="${size.fontSize.toFixed(2)}" text-anchor="middle" filter="url(#glow)">${nodes.join("")}</g>
+  <g fill="${style.color}" font-family="monospace" text-anchor="middle">${trails.join("")}</g>
+  <g fill="#ffffff" opacity="0.035">${scanlines}</g>
 </svg>`;
 }
 
-export async function renderMurmurationPortrait(input: Buffer, style?: string): Promise<RenderedMurmuration> {
+function orientedDimensions(metadata: sharp.Metadata) {
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  const swapsAxes = [5, 6, 7, 8].includes(metadata.orientation ?? 0);
+  return swapsAxes ? { width: height, height: width } : { width, height };
+}
+
+export async function renderMurmurationPortrait(
+  input: Buffer,
+  requestedStyle?: string,
+): Promise<RenderedMurmuration> {
   if (input.byteLength > MURMURATION_LIMITS.maxFileBytes) {
     throw new Error("Portrait is too large. Maximum size is 12 MB.");
   }
 
-  const requestedStyle = style ?? "";
-  const styleId: MurmurationStyleId = isMurmurationStyleId(requestedStyle)
-    ? requestedStyle
+  const styleId: MurmurationStyleId = isMurmurationStyleId(requestedStyle ?? "")
+    ? requestedStyle as MurmurationStyleId
     : "signal";
-  const canvasSize = MURMURATION_LIMITS.outputSize;
-  const image = sharp(input, { failOn: "none" })
-    .resize(canvasSize, canvasSize, { fit: "contain", background: "#000000" })
-    .removeAlpha()
-    .ensureAlpha();
-  const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
-  const seed = Math.random() * 10000;
-  const points = buildPoints(data, info.width, info.height, seed);
+  const metadata = await sharp(input, { failOn: "none" }).metadata();
+  const source = orientedDimensions(metadata);
+  if (!source.width || !source.height) throw new Error("Could not read portrait dimensions.");
+  const size = getMurmurationGridSize(source.width, source.height);
+  const sample = await sharp(input, { failOn: "none" })
+    .rotate()
+    .resize(size.columns, size.rows, { fit: "fill", kernel: "lanczos3" })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const cells = buildMurmurationCells(sample.data, sample.info.width, sample.info.height);
 
-  if (points.length < 40) {
-    throw new Error("Could not read enough detail. Try a brighter portrait with a clear subject.");
+  if (cells.length < 80) {
+    throw new Error("This portrait has too little contrast. Try a clearer, brighter image with a visible subject.");
   }
 
   const workDir = await mkdtemp(path.join(tmpdir(), "ascii-murmuration-"));
   try {
-    const pattern = path.join(workDir, "frame-%04d.png");
-    const outputPath = path.join(workDir, "murmuration.mp4");
-    const totalFrames = MURMURATION_LIMITS.durationSeconds * MURMURATION_LIMITS.fps;
+    const framePattern = path.join(workDir, "frame-%04d.png");
+    const outputPath = path.join(workDir, "asciilograph-murmuration.mp4");
+    const frameCount = MURMURATION_LIMITS.durationSeconds * MURMURATION_LIMITS.fps;
 
-    for (let index = 0; index < totalFrames; index += 1) {
-      const svg = renderFrame(points, index, totalFrames, styleId);
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+      const svg = renderFrame(cells, size, frameIndex, styleId);
       const png = await sharp(Buffer.from(svg)).png().toBuffer();
-      await writeFile(pattern.replace("%04d", String(index + 1).padStart(4, "0")), png);
+      const filename = framePattern.replace("%04d", String(frameIndex + 1).padStart(4, "0"));
+      await writeFile(filename, png);
     }
 
     await runFfmpeg([
-      "-y", "-framerate", String(MURMURATION_LIMITS.fps), "-i", pattern,
+      "-y", "-framerate", String(MURMURATION_LIMITS.fps), "-i", framePattern,
       "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast",
-      "-crf", "24", "-movflags", "+faststart", outputPath,
+      "-crf", "23", "-movflags", "+faststart", outputPath,
     ], workDir);
 
-    const fileInfo = await stat(outputPath);
-    if (fileInfo.size > 50 * 1024 * 1024) throw new Error("Rendered MP4 is over Telegram's 50 MB limit.");
+    const outputStat = await stat(outputPath);
+    if (outputStat.size > 50 * 1024 * 1024) {
+      throw new Error("Rendered MP4 is over Telegram's 50 MB limit.");
+    }
 
     return {
       durationSeconds: MURMURATION_LIMITS.durationSeconds,
