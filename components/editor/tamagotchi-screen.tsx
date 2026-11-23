@@ -31,6 +31,7 @@ interface TamagotchiScreenProps {
   eggWarmCycles: number;
   headAccessory: HeadAccessory;
   droneAccessory: DroneAccessory;
+  morningBoostUntil?: number;
   onScreenClick: () => void;
   activeActionEffect: string | null;
 }
@@ -47,11 +48,31 @@ export function TamagotchiScreen({
   eggWarmCycles,
   headAccessory,
   droneAccessory,
+  morningBoostUntil,
   onScreenClick,
   activeActionEffect,
 }: TamagotchiScreenProps) {
   const themeColors = THEME_CONFIG[theme] ?? THEME_CONFIG.green;
   const [bounce, setBounce] = useState(0);
+  const [timeInfo, setTimeInfo] = useState(() => {
+    if (typeof window === "undefined") {
+      return { isNight: false, now: 0 };
+    }
+    const h = new Date().getHours();
+    return { isNight: h >= 23 || h < 7, now: Date.now() };
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const h = new Date().getHours();
+      setTimeInfo({ isNight: h >= 23 || h < 7, now: Date.now() });
+    };
+    const timer = window.setInterval(update, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const isNight = timeInfo.isNight;
+  const boostActive = Boolean(morningBoostUntil && morningBoostUntil > timeInfo.now);
 
   // Дыхание питомца
   useEffect(() => {
@@ -240,10 +261,21 @@ export function TamagotchiScreen({
         </div>
       )}
 
-      {/* Нижняя подсказка */}
-      <div className="relative z-10 flex items-center justify-between text-[0.52rem] uppercase tracking-wider text-white/40 pt-1 border-t border-white/10">
-        <span>ТАПАЙ ДЛЯ ВЗАИМОДЕЙСТВИЯ</span>
-        <span>Y2K ТАМАГОЧИ</span>
+      {/* Нижняя строка: цикл дня/ночи и утренний буст */}
+      <div className="relative z-10 flex items-center justify-between text-[0.52rem] uppercase tracking-wider text-white/50 pt-1 border-t border-white/10">
+        <span className="flex items-center gap-1.5">
+          {isNight ? (
+            <span className="text-cyan-400 font-bold">🌙 НОЧНОЙ ЦИКЛ // ДЕФРАГ</span>
+          ) : (
+            <span className="text-amber-400 font-bold">☀️ ДНЕВНОЙ ЦИКЛ // ОНЛАЙН</span>
+          )}
+          {boostActive && (
+            <span className="text-green-400 font-black animate-pulse border border-green-500/40 px-1 bg-green-950/40">
+              ⚡ COLD BOOT (+25% EXP)
+            </span>
+          )}
+        </span>
+        <span>ТАПАЙ ДЛЯ СИНХРОНИЗАЦИИ</span>
       </div>
     </div>
   );

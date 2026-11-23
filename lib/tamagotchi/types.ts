@@ -1,3 +1,4 @@
+import type { CombatBuffType } from "./combat-buffs";
 import type { SkillTreeState } from "./skill-tree";
 
 export type PetStage =
@@ -206,6 +207,14 @@ export interface TamagotchiState {
   skillTree: SkillTreeState;
   bestSurvivorTime: number; // in seconds
   bestSurvivorKills: number;
+  dailyStreak: number; // 1-7
+  lastLoginDate: string; // YYYY-MM-DD
+  claimedDailyRewardToday: boolean;
+  lastQuestDate: string; // YYYY-MM-DD
+  dailyContractClaimed: boolean;
+  morningBoostUntil: number; // timestamp
+  inventoryBuffs: Record<CombatBuffType, number>;
+  activeCombatBuff: CombatBuffType | null;
 }
 
 export type MiniGameType = "NONE" | "HACK" | "BUG_SMASH" | "RUNNER";

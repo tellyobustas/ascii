@@ -63,7 +63,10 @@ export function playSound(
     | "combo"
     | "bomb"
     | "coin"
-    | "spin",
+    | "spin"
+    | "reflect"
+    | "tesla"
+    | "claim",
   enabled = true,
 ) {
   if (!enabled) return;
@@ -307,6 +310,57 @@ export function playSound(
           osc.stop(now + idx * 0.08 + 0.1);
         });
         triggerHaptic("warning");
+        break;
+      }
+
+      case "reflect": {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(1400, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.16);
+        triggerHaptic("heavy");
+        break;
+      }
+
+      case "tesla": {
+        [980, 1420, 720].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+          osc.frequency.linearRampToValueAtTime(freq * 0.4, now + idx * 0.04 + 0.06);
+          gain.gain.setValueAtTime(0.08, now + idx * 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.07);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.04);
+          osc.stop(now + idx * 0.04 + 0.07);
+        });
+        triggerHaptic("medium");
+        break;
+      }
+
+      case "claim": {
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+          gain.gain.setValueAtTime(0.1, now + idx * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.16);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.07);
+          osc.stop(now + idx * 0.07 + 0.16);
+        });
+        triggerHaptic("success");
         break;
       }
     }

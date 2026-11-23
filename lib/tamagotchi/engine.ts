@@ -1,3 +1,11 @@
+import { COMBAT_BUFFS, type CombatBuffType } from "./combat-buffs";
+import {
+  DAILY_CONTRACT_BONUS,
+  DAILY_LOGIN_REWARDS,
+  generateDailyQuests,
+  getTodayDateString,
+  getYesterdayDateString,
+} from "./daily";
 import {
   DEFAULT_SKILL_TREE,
   getSkillNodeCost,
@@ -16,38 +24,16 @@ import {
 
 const STORAGE_KEY = "asciilograph_tamagotchi_v1";
 
-export const INITIAL_QUESTS: Quest[] = [
-  {
-    id: "feed_3",
-    title: "КИБЕР-ОБЕД",
-    desc: "Покормить питомца 3 раза",
-    target: 3,
-    current: 0,
-    rewardBytes: 15,
-    rewardExp: 40,
-    completed: false,
-  },
-  {
-    id: "play_2",
-    title: "МАСТЕР АРКАД",
-    desc: "Сыграть в мини-игры 2 раза",
-    target: 2,
-    current: 0,
-    rewardBytes: 25,
-    rewardExp: 60,
-    completed: false,
-  },
-  {
-    id: "clean_1",
-    title: "ДЕФРАГМЕНТАЦИЯ",
-    desc: "Очистить кэш буфера 1 раз",
-    target: 1,
-    current: 0,
-    rewardBytes: 12,
-    rewardExp: 35,
-    completed: false,
-  },
-];
+export const DEFAULT_INVENTORY_BUFFS: Record<CombatBuffType, number> = {
+  NONE: 0,
+  BLADEMAIL: 0,
+  BERSERK: 0,
+  TESLA: 0,
+  VAMPIRISM: 0,
+  QUANTUM_RISK: 0,
+};
+
+export const INITIAL_QUESTS: Quest[] = generateDailyQuests("2026-11-23");
 
 export const DEFAULT_TAMAGOTCHI_STATE: TamagotchiState = {
   name: "CORE-01",
@@ -87,6 +73,14 @@ export const DEFAULT_TAMAGOTCHI_STATE: TamagotchiState = {
   skillTree: DEFAULT_SKILL_TREE,
   bestSurvivorTime: 0,
   bestSurvivorKills: 0,
+  dailyStreak: 1,
+  lastLoginDate: "",
+  claimedDailyRewardToday: false,
+  lastQuestDate: "",
+  dailyContractClaimed: false,
+  morningBoostUntil: 0,
+  inventoryBuffs: DEFAULT_INVENTORY_BUFFS,
+  activeCombatBuff: null,
 };
 
 export function getMaxEnergy(state: TamagotchiState): number {
@@ -236,14 +230,22 @@ export function applyTimeDecay(
   const fw = currentState.attributes?.firewall ?? 0;
   const bugResistFactor = Math.max(0.4, 1 - fw * 0.1);
 
+  const currentHour = new Date().getHours();
+  const isNight = currentHour >= 23 || currentHour < 7;
+
   if (currentState.isSleeping) {
-    energy = Math.min(maxEnergy, energy + hours * 18);
-    happiness = Math.max(0, happiness - hours * 1.5);
-    cleanliness = Math.max(0, cleanliness - hours * 1.5 * bugResistFactor);
+    // Ночной сон: ускоренное восстановление заряда (+24/ч), но дефрагментация дает легкий налет в кэше
+    const chargeSpeed = isNight ? 24 : 18;
+    energy = Math.min(maxEnergy, energy + hours * chargeSpeed);
+    happiness = Math.max(0, happiness - hours * (isNight ? 1.0 : 1.5));
+    // Откат чистоты от ночной дефрагментации (требует утренней очистки)
+    cleanliness = Math.max(0, cleanliness - hours * (isNight ? 2.5 : 1.5) * bugResistFactor);
   } else {
-    energy = Math.max(0, energy - hours * 6);
-    happiness = Math.max(0, happiness - hours * 5);
-    cleanliness = Math.max(0, cleanliness - hours * 4 * bugResistFactor);
+    // Ночное бодрствование: ночной перегрев (+40% истощения)
+    const nightFatigue = isNight ? 1.4 : 1.0;
+    energy = Math.max(0, energy - hours * 6 * nightFatigue);
+    happiness = Math.max(0, happiness - hours * 5 * nightFatigue);
+    cleanliness = Math.max(0, cleanliness - hours * 4 * bugResistFactor * nightFatigue);
   }
 
   if (cleanliness < 50 && poopCount < 1) poopCount = 1;
@@ -497,18 +499,31 @@ export function toggleSleep(state: TamagotchiState): {
   }
 
   const isSleeping = !state.isSleeping;
+  let morningBoostUntil = state.morningBoostUntil ?? 0;
+  let message = isSleeping
+    ? "Вход в режим гибернации (Ночная дефрагментация и зарядка)..."
+    : "Гибернация завершена. Питомец онлайн!";
+
+  // Пробуждение утром дает утренний оверклок (Cold Boot)
+  if (!isSleeping && state.isSleeping) {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour <= 12) {
+      morningBoostUntil = Date.now() + 2 * 60 * 60 * 1000; // 2 часа
+      message = "✦ УТРЕННИЙ БУСТ // COLD BOOT: +25% к опыту во всех играх на 2 часа! ✦";
+    }
+  }
+
   const nextState: TamagotchiState = {
     ...state,
     isSleeping,
+    morningBoostUntil,
     lastTick: Date.now(),
   };
 
   return {
     state: nextState,
     isSleeping,
-    message: isSleeping
-      ? "Вход в режим гибернации (Зарядка включена)..."
-      : "Гибернация завершена. Питомец онлайн!",
+    message,
   };
 }
 
@@ -681,6 +696,34 @@ export function loadTamagotchiState(): TamagotchiState {
     }
 
     const parsed = JSON.parse(raw) as Partial<TamagotchiState>;
+    const todayStr = getTodayDateString();
+    const yesterdayStr = getYesterdayDateString();
+
+    let dailyStreak = parsed.dailyStreak ?? 1;
+    let claimedDailyRewardToday = parsed.claimedDailyRewardToday ?? false;
+    const lastLogin = parsed.lastLoginDate ?? "";
+
+    if (lastLogin !== todayStr) {
+      if (lastLogin === yesterdayStr) {
+        if (claimedDailyRewardToday) {
+          dailyStreak = dailyStreak >= 7 ? 1 : dailyStreak + 1;
+        }
+      } else if (lastLogin !== "") {
+        dailyStreak = 1;
+      }
+      claimedDailyRewardToday = false;
+    }
+
+    let dailyQuests = parsed.dailyQuests ?? INITIAL_QUESTS;
+    let dailyContractClaimed = parsed.dailyContractClaimed ?? false;
+    let lastQuestDate = parsed.lastQuestDate ?? "";
+
+    if (lastQuestDate !== todayStr) {
+      dailyQuests = generateDailyQuests(todayStr);
+      dailyContractClaimed = false;
+      lastQuestDate = todayStr;
+    }
+
     const merged: TamagotchiState = {
       ...DEFAULT_TAMAGOTCHI_STATE,
       ...parsed,
@@ -692,7 +735,18 @@ export function loadTamagotchiState(): TamagotchiState {
         ...DEFAULT_SKILL_TREE,
         ...(parsed.skillTree ?? {}),
       },
-      dailyQuests: parsed.dailyQuests ?? INITIAL_QUESTS,
+      inventoryBuffs: {
+        ...DEFAULT_INVENTORY_BUFFS,
+        ...(parsed.inventoryBuffs ?? {}),
+      },
+      dailyQuests,
+      dailyStreak,
+      lastLoginDate: parsed.lastLoginDate ?? "",
+      claimedDailyRewardToday,
+      lastQuestDate,
+      dailyContractClaimed,
+      morningBoostUntil: parsed.morningBoostUntil ?? 0,
+      activeCombatBuff: parsed.activeCombatBuff ?? null,
       bestSurvivorTime: parsed.bestSurvivorTime ?? 0,
       bestSurvivorKills: parsed.bestSurvivorKills ?? 0,
     };
@@ -742,5 +796,149 @@ export function buySkillTreeNode(
     state: nextState,
     success: true,
     message: `Изучено: «${node.nameRu}» (Ур. ${currentLevel + 1}/${node.maxLevel})!`,
+  };
+}
+
+export function claimDailyLoginReward(state: TamagotchiState): {
+  state: TamagotchiState;
+  success: boolean;
+  message: string;
+} {
+  if (state.claimedDailyRewardToday) {
+    return {
+      state,
+      success: false,
+      message: "Награда за сегодняшний день уже получена! Возвращайся завтра.",
+    };
+  }
+
+  const streak = Math.max(1, Math.min(7, state.dailyStreak || 1));
+  const reward =
+    DAILY_LOGIN_REWARDS.find((r) => r.day === streak) ?? DAILY_LOGIN_REWARDS[0]!;
+
+  const maxEnergy = getMaxEnergy(state);
+  const nextInv = { ...(state.inventoryBuffs ?? DEFAULT_INVENTORY_BUFFS) };
+  if (reward.freeBuff && reward.freeBuff !== "NONE") {
+    nextInv[reward.freeBuff] = (nextInv[reward.freeBuff] ?? 0) + 1;
+  }
+
+  let nextState: TamagotchiState = {
+    ...state,
+    bytes: state.bytes + reward.bytes,
+    skillPoints: state.skillPoints + reward.skillPoints,
+    energy: maxEnergy, // Полная подзарядка
+    claimedDailyRewardToday: true,
+    lastLoginDate: getTodayDateString(),
+    inventoryBuffs: nextInv,
+    lastTick: Date.now(),
+  };
+
+  nextState = addExp(nextState, reward.exp);
+
+  return {
+    state: nextState,
+    success: true,
+    message: `✦ ПОЛУЧЕНО [ДЕНЬ ${streak}]: +${reward.bytes} B, +${reward.exp} EXP${reward.skillPoints ? `, +${reward.skillPoints} SP` : ""}${reward.freeBuff ? `, Оверклок «${reward.freeBuff}»` : ""}! ✦`,
+  };
+}
+
+export function claimDailyContract(state: TamagotchiState): {
+  state: TamagotchiState;
+  success: boolean;
+  message: string;
+} {
+  const allCompleted = state.dailyQuests.every((q) => q.completed);
+  if (!allCompleted) {
+    return {
+      state,
+      success: false,
+      message: "Выполни все 4 ежедневных директивы для получения бонуса!",
+    };
+  }
+
+  if (state.dailyContractClaimed) {
+    return {
+      state,
+      success: false,
+      message: "Квантовый контейнер дня уже открыт! Обновление завтра.",
+    };
+  }
+
+  let nextState: TamagotchiState = {
+    ...state,
+    bytes: state.bytes + DAILY_CONTRACT_BONUS.bytes,
+    skillPoints: state.skillPoints + DAILY_CONTRACT_BONUS.skillPoints,
+    dailyContractClaimed: true,
+    lastTick: Date.now(),
+  };
+
+  nextState = addExp(nextState, DAILY_CONTRACT_BONUS.exp);
+
+  return {
+    state: nextState,
+    success: true,
+    message: `★ КВАНТОВЫЙ КОНТЕЙНЕР ОТКРЫТ! +${DAILY_CONTRACT_BONUS.bytes} B, +${DAILY_CONTRACT_BONUS.exp} EXP, +${DAILY_CONTRACT_BONUS.skillPoints} SP! ★`,
+  };
+}
+
+export function buyCombatBuff(
+  state: TamagotchiState,
+  buffType: CombatBuffType,
+): { state: TamagotchiState; success: boolean; message: string } {
+  if (buffType === "NONE") {
+    return {
+      state: { ...state, activeCombatBuff: null },
+      success: true,
+      message: "Боевой оверклок снят.",
+    };
+  }
+
+  const def = COMBAT_BUFFS[buffType];
+  if (!def) {
+    return { state, success: false, message: "Неизвестный оверклок!" };
+  }
+
+  const nextInv = { ...(state.inventoryBuffs ?? DEFAULT_INVENTORY_BUFFS) };
+  const hasFree = (nextInv[buffType] ?? 0) > 0;
+
+  if (hasFree) {
+    nextInv[buffType] = Math.max(0, nextInv[buffType] - 1);
+    return {
+      state: {
+        ...state,
+        inventoryBuffs: nextInv,
+        activeCombatBuff: buffType,
+      },
+      success: true,
+      message: `Активирован бесплатный чип «${def.nameRu}»!`,
+    };
+  }
+
+  if (state.bytes < def.cost) {
+    return {
+      state,
+      success: false,
+      message: `Мало байтов! Нужно ${def.cost} B (в наличии: ${state.bytes} B).`,
+    };
+  }
+
+  return {
+    state: {
+      ...state,
+      bytes: state.bytes - def.cost,
+      activeCombatBuff: buffType,
+    },
+    success: true,
+    message: `Приобретен и активирован оверклок «${def.nameRu}» на 1 рейд!`,
+  };
+}
+
+export function setActiveCombatBuff(
+  state: TamagotchiState,
+  buffType: CombatBuffType | null,
+): TamagotchiState {
+  return {
+    ...state,
+    activeCombatBuff: buffType,
   };
 }

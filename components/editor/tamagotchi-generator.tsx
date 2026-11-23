@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TamagotchiBuffModal } from "@/components/editor/tamagotchi-buff-modal";
+import { TamagotchiDailyModal } from "@/components/editor/tamagotchi-daily-modal";
 import { TamagotchiGames } from "@/components/editor/tamagotchi-games";
 import { TamagotchiPassport } from "@/components/editor/tamagotchi-passport";
 import { TamagotchiScreen } from "@/components/editor/tamagotchi-screen";
 import { TamagotchiSkillTree } from "@/components/editor/tamagotchi-skill-tree";
 import { TamagotchiSurvivors } from "@/components/editor/tamagotchi-survivors";
+import { COMBAT_BUFFS } from "@/lib/tamagotchi/combat-buffs";
+import { advanceQuestProgress } from "@/lib/tamagotchi/daily";
 import type { SurvivorRunResult } from "@/lib/tamagotchi/survivors-types";
 import {
   applyTimeDecay,
@@ -50,10 +54,11 @@ export function TamagotchiGenerator() {
   const [activeGame, setActiveGame] = useState<MiniGameType>("NONE");
   const [showSurvivors, setShowSurvivors] = useState(false);
   const [showSkillTree, setShowSkillTree] = useState(false);
+  const [showDailyModal, setShowDailyModal] = useState(false);
+  const [showBuffModal, setShowBuffModal] = useState(false);
   const [showPassport, setShowPassport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgrades, setShowUpgrades] = useState(false);
-  const [showQuests, setShowQuests] = useState(false);
   const [showWardrobe, setShowWardrobe] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [tempName, setTempName] = useState("");
@@ -155,10 +160,16 @@ export function TamagotchiGenerator() {
 
     playSound("pet", state.soundEnabled);
     const res = petAnimal(state);
-    setState(res.state);
-    saveTamagotchiState(res.state);
+    const qAdv = advanceQuestProgress(res.state.dailyQuests, "care_pet_5", 1);
+    const nextState = {
+      ...res.state,
+      dailyQuests: qAdv.quests,
+      bytes: res.state.bytes + qAdv.bytesAwarded,
+    };
+    setState(nextState);
+    saveTamagotchiState(nextState);
     setStatusMessage(res.message);
-    flashEffect("♥ СИНХРОНИЗАЦИЯ");
+    flashEffect(qAdv.anyCompleted ? "🏆 ДИРЕКТИВА ВЫПОЛНЕНА!" : "♥ СИНХРОНИЗАЦИЯ");
   };
 
   // Питание
@@ -166,13 +177,25 @@ export function TamagotchiGenerator() {
     const res = feedPet(state, food.id);
     if (res.success) {
       playSound("feed", state.soundEnabled);
-      flashEffect(`+${food.energyBoost}% ЗАРЯД`);
+      const qAdv = advanceQuestProgress(res.state.dailyQuests, "care_feed_3", 1);
+      const nextState = {
+        ...res.state,
+        dailyQuests: qAdv.quests,
+        bytes: res.state.bytes + qAdv.bytesAwarded,
+      };
       setShowFeedMenu(false);
+      setState(nextState);
+      saveTamagotchiState(nextState);
+      flashEffect(
+        qAdv.anyCompleted
+          ? "🏆 ДИРЕКТИВА ВЫПОЛНЕНА!"
+          : `+${food.energyBoost}% ЗАРЯД`,
+      );
     } else {
       playSound("error", state.soundEnabled);
+      setState(res.state);
+      saveTamagotchiState(res.state);
     }
-    setState(res.state);
-    saveTamagotchiState(res.state);
     setStatusMessage(res.message);
   };
 
@@ -187,10 +210,16 @@ export function TamagotchiGenerator() {
 
     playSound("clean", state.soundEnabled);
     const res = cleanPet(state);
-    setState(res.state);
-    saveTamagotchiState(res.state);
+    const qAdv = advanceQuestProgress(res.state.dailyQuests, "care_clean_1", 1);
+    const nextState = {
+      ...res.state,
+      dailyQuests: qAdv.quests,
+      bytes: res.state.bytes + qAdv.bytesAwarded,
+    };
+    setState(nextState);
+    saveTamagotchiState(nextState);
     setStatusMessage(res.message);
-    flashEffect("✦ КЭШ ОЧИЩЕН ✦");
+    flashEffect(qAdv.anyCompleted ? "🏆 ДИРЕКТИВА ВЫПОЛНЕНА!" : "✦ КЭШ ОЧИЩЕН ✦");
   };
 
   // Лечение
@@ -282,20 +311,11 @@ export function TamagotchiGenerator() {
         skillPoints,
       };
 
-      // Прогресс квеста на игры
-      const nextQuests = updated.dailyQuests.map((q) => {
-        if (q.id === "play_2" && !q.completed) {
-          const nextVal = q.current + 1;
-          if (nextVal >= q.target) {
-            updated.bytes += q.rewardBytes;
-            return { ...q, current: q.target, completed: true };
-          }
-          return { ...q, current: nextVal };
-        }
-        return q;
-      });
+      // Прогресс квеста на аркады
+      const qAdv = advanceQuestProgress(updated.dailyQuests, "arcade_play_2", 1);
+      updated.dailyQuests = qAdv.quests;
+      updated.bytes += qAdv.bytesAwarded;
 
-      updated.dailyQuests = nextQuests;
       saveTamagotchiState(updated);
       return updated;
     });
@@ -396,20 +416,37 @@ export function TamagotchiGenerator() {
         skillPoints,
       };
 
-      // Прогресс квеста
-      const nextQuests = updated.dailyQuests.map((q) => {
-        if (q.id === "play_2" && !q.completed) {
-          const nextVal = q.current + 1;
-          if (nextVal >= q.target) {
-            updated.bytes += q.rewardBytes;
-            return { ...q, current: q.target, completed: true };
-          }
-          return { ...q, current: nextVal };
-        }
-        return q;
-      });
+      // Прогресс ежедневных директив рейда
+      let currentQuests = updated.dailyQuests;
+      if (result.survivedTime >= 60) {
+        const qAdv = advanceQuestProgress(currentQuests, "surv_time_60", 1);
+        currentQuests = qAdv.quests;
+        updated.bytes += qAdv.bytesAwarded;
+      }
+      if (result.enemiesKilled > 0) {
+        const qAdv = advanceQuestProgress(
+          currentQuests,
+          "surv_kills_80",
+          result.enemiesKilled,
+        );
+        currentQuests = qAdv.quests;
+        updated.bytes += qAdv.bytesAwarded;
+      }
+      if (result.won || result.survivedTime >= 120) {
+        const qAdv = advanceQuestProgress(currentQuests, "surv_tank_kill", 1);
+        currentQuests = qAdv.quests;
+        updated.bytes += qAdv.bytesAwarded;
+      }
+      if (prev.activeCombatBuff && prev.activeCombatBuff !== "NONE") {
+        const qAdv = advanceQuestProgress(currentQuests, "surv_buff_run", 1);
+        currentQuests = qAdv.quests;
+        updated.bytes += qAdv.bytesAwarded;
+      }
 
-      updated.dailyQuests = nextQuests;
+      updated.dailyQuests = currentQuests;
+      // Расход одноразового баффа на рейд
+      updated.activeCombatBuff = null;
+
       saveTamagotchiState(updated);
       return updated;
     });
@@ -425,10 +462,18 @@ export function TamagotchiGenerator() {
     playSound("spin", state.soundEnabled);
     triggerHaptic("heavy");
     const res = spinLuckyWheel(state);
-    setState(res.state);
-    saveTamagotchiState(res.state);
+    const qAdv = advanceQuestProgress(res.state.dailyQuests, "arcade_wheel_1", 1);
+    const nextState = {
+      ...res.state,
+      dailyQuests: qAdv.quests,
+      bytes: res.state.bytes + qAdv.bytesAwarded,
+    };
+    setState(nextState);
+    saveTamagotchiState(nextState);
     setStatusMessage(res.rewardText);
-    flashEffect("🎰 РУЛЕТКА ВЗЛОМА");
+    flashEffect(
+      qAdv.anyCompleted ? "🏆 ДИРЕКТИВА ВЫПОЛНЕНА!" : "🎰 РУЛЕТКА ВЗЛОМА",
+    );
   };
 
   // Прокачка характеристик
@@ -585,6 +630,7 @@ export function TamagotchiGenerator() {
         isSleeping={state.isSleeping}
         level={state.level}
         mood={mood}
+        morningBoostUntil={state.morningBoostUntil}
         name={state.name}
         onScreenClick={handleScreenPet}
         poopCount={state.poopCount}
@@ -781,6 +827,59 @@ export function TamagotchiGenerator() {
               ФАЕРВОЛ + ДРЕВО
             </span>
           </div>
+        </div>
+
+        {/* Слот активного оверклока (баффа на 1 бой) */}
+        <div className="mt-2.5 flex items-center justify-between border border-white/10 bg-black/60 p-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base">
+              {state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
+                ? COMBAT_BUFFS[state.activeCombatBuff].glyph
+                : "⚡"}
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[0.48rem] text-white/50 uppercase">
+                  РАЗГОННЫЙ ЧИП (НА 1 РЕЙД):
+                </span>
+                {state.activeCombatBuff && state.activeCombatBuff !== "NONE" && (
+                  <span className="text-[0.46rem] px-1 py-0.2 border text-green-400 border-green-500/40">
+                    АКТИВЕН
+                  </span>
+                )}
+              </div>
+              <p
+                className="text-[0.62rem] font-black uppercase mt-0.5"
+                style={{
+                  color:
+                    state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
+                      ? COMBAT_BUFFS[state.activeCombatBuff].color
+                      : "rgba(255,255,255,0.7)",
+                }}
+              >
+                {state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
+                  ? COMBAT_BUFFS[state.activeCombatBuff].nameRu
+                  : "БЕЗ ОВЕРКЛОКА (СТАНДАРТ)"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              playSound("click", state.soundEnabled);
+              setShowBuffModal(true);
+            }}
+            type="button"
+            className="border px-2.5 py-1 text-[0.55rem] font-black uppercase tracking-wider transition hover:bg-white/10"
+            style={{
+              borderColor: state.activeCombatBuff
+                ? themeColors.primary
+                : "rgba(255,255,255,0.3)",
+              color: state.activeCombatBuff ? themeColors.primary : "#fff",
+            }}
+          >
+            {state.activeCombatBuff ? "СМЕНИТЬ" : "+ ВЫБРАТЬ БАФФ"}
+          </button>
         </div>
 
         {/* Кнопки запуска и прокачки */}
@@ -1139,16 +1238,26 @@ export function TamagotchiGenerator() {
         <button
           onClick={() => {
             playSound("click", state.soundEnabled);
-            setShowQuests((prev) => !prev);
+            setShowDailyModal(true);
           }}
           type="button"
-          className="border py-2 px-1 text-center transition hover:opacity-80"
+          className="relative border py-2 px-1 text-center transition hover:opacity-80"
           style={{
-            borderColor: themeColors.border,
-            color: themeColors.primary,
+            borderColor: !state.claimedDailyRewardToday
+              ? "#ff007f"
+              : themeColors.border,
+            color: !state.claimedDailyRewardToday
+              ? "#ff007f"
+              : themeColors.primary,
           }}
         >
-          🏆 КВЕСТЫ
+          <span>📅 НАГРАДЫ</span>
+          {!state.claimedDailyRewardToday && (
+            <span className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+          )}
         </button>
 
         <button
@@ -1247,52 +1356,6 @@ export function TamagotchiGenerator() {
                 +1 ФАЕРВОЛ (1 SP)
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Дровер ежедневных квестов */}
-      {showQuests && (
-        <div className="border border-white/20 bg-black/90 p-3">
-          <div className="flex items-center justify-between pb-2 border-b border-white/10">
-            <span
-              className="text-xs font-black uppercase"
-              style={{ color: themeColors.primary }}
-            >
-              ДИРЕКТИВЫ ДНЯ
-            </span>
-            <span className="text-[0.58rem] text-white/60">ОБНОВЛЕНИЕ 24Ч</span>
-          </div>
-
-          <div className="mt-2 flex flex-col gap-2">
-            {state.dailyQuests.map((quest) => (
-              <div
-                key={quest.id}
-                className="flex items-center justify-between p-2 border border-white/10 text-xs"
-              >
-                <div>
-                  <span className="font-bold text-white">{quest.title}</span>
-                  <p className="text-[0.55rem] text-white/50">{quest.desc}</p>
-                </div>
-                <div className="text-right">
-                  <span
-                    className="font-black"
-                    style={{
-                      color: quest.completed
-                        ? themeColors.primary
-                        : "rgba(255,255,255,0.7)",
-                    }}
-                  >
-                    {quest.completed
-                      ? "✓ ВЫПОЛНЕНО"
-                      : `${quest.current} / ${quest.target}`}
-                  </span>
-                  <span className="block text-[0.52rem] text-yellow-400">
-                    +{quest.rewardBytes} B | +{quest.rewardExp} EXP
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -1486,6 +1549,7 @@ export function TamagotchiGenerator() {
       {/* Главный боевой режим Rogue-Lite: Vampire Survivors */}
       {showSurvivors && (
         <TamagotchiSurvivors
+          activeBuff={state.activeCombatBuff}
           onClose={() => setShowSurvivors(false)}
           onFinishRun={handleFinishSurvivors}
           tamagotchi={state}
@@ -1496,6 +1560,30 @@ export function TamagotchiGenerator() {
       {showSkillTree && (
         <TamagotchiSkillTree
           onClose={() => setShowSkillTree(false)}
+          onUpdateState={(nextState) => {
+            setState(nextState);
+            saveTamagotchiState(nextState);
+          }}
+          state={state}
+        />
+      )}
+
+      {/* Ежедневные награды за вход и директивы дня */}
+      {showDailyModal && (
+        <TamagotchiDailyModal
+          onClose={() => setShowDailyModal(false)}
+          onUpdateState={(nextState) => {
+            setState(nextState);
+            saveTamagotchiState(nextState);
+          }}
+          state={state}
+        />
+      )}
+
+      {/* Выбор боевого оверклока (баффа на 1 бой) */}
+      {showBuffModal && (
+        <TamagotchiBuffModal
+          onClose={() => setShowBuffModal(false)}
           onUpdateState={(nextState) => {
             setState(nextState);
             saveTamagotchiState(nextState);

@@ -11,11 +11,13 @@ import {
   type SurvivorRunResult,
   type UpgradeCard,
 } from "@/lib/tamagotchi/survivors-types";
+import { COMBAT_BUFFS, type CombatBuffType } from "@/lib/tamagotchi/combat-buffs";
 import { playSound, triggerHaptic } from "@/lib/tamagotchi/sound";
 import { THEME_CONFIG, type TamagotchiState } from "@/lib/tamagotchi/types";
 
 interface TamagotchiSurvivorsProps {
   tamagotchi: TamagotchiState;
+  activeBuff?: CombatBuffType | null;
   onFinishRun: (result: SurvivorRunResult) => void;
   onClose: () => void;
 }
@@ -118,6 +120,7 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
 
 export function TamagotchiSurvivors({
   tamagotchi,
+  activeBuff,
   onFinishRun,
   onClose,
 }: TamagotchiSurvivorsProps) {
@@ -172,6 +175,13 @@ export function TamagotchiSurvivors({
   // Game over state
   const [isGameOver, setIsGameOver] = useState(false);
   const [runWon, setRunWon] = useState(false);
+  const [morningBoostActive] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(
+      tamagotchi.morningBoostUntil &&
+        tamagotchi.morningBoostUntil > Date.now(),
+    );
+  });
 
   // Virtual Joystick state
   const joystickCenterRef = useRef<{ x: number; y: number } | null>(null);
@@ -214,6 +224,14 @@ export function TamagotchiSurvivors({
   const levelRef = useRef(1);
   const expRef = useRef(0);
   const expToNextRef = useRef(25);
+  const blademailTimerRef = useRef(0);
+  const teslaTimerRef = useRef(1.5);
+  const reflectRingsRef = useRef<
+    Array<{ x: number; y: number; radius: number; maxRadius: number; life: number }>
+  >([]);
+  const lightningBoltsRef = useRef<
+    Array<{ x1: number; y1: number; x2: number; y2: number; life: number }>
+  >([]);
 
   const themeColors = THEME_CONFIG[tamagotchi.theme] ?? THEME_CONFIG.green;
 
@@ -384,6 +402,27 @@ export function TamagotchiSurvivors({
       }
 
       // 2. Weapon Auto-Firing
+      const hpRatio = player.hp / Math.max(1, player.maxHp);
+      let berserkDamageMult = 1.0;
+      let berserkCooldownMult = 1.0;
+      if (activeBuff === "BERSERK") {
+        if (hpRatio < 0.25) {
+          berserkDamageMult = 3.5;
+          berserkCooldownMult = 0.5;
+        } else if (hpRatio < 0.5) {
+          berserkDamageMult = 2.0;
+          berserkCooldownMult = 0.7;
+        } else if (hpRatio < 0.75) {
+          berserkDamageMult = 1.35;
+          berserkCooldownMult = 0.85;
+        }
+      }
+
+      const morningBoostMult =
+        tamagotchi.morningBoostUntil && tamagotchi.morningBoostUntil > Date.now()
+          ? 1.15
+          : 1.0;
+
       weaponsRef.current.forEach((w) => {
         const def = WEAPON_REGISTRY[w.id];
         if (!def) return;
@@ -391,13 +430,17 @@ export function TamagotchiSurvivors({
         w.cooldownTimer -= dt;
         if (w.cooldownTimer <= 0) {
           const cooldown =
-            (def.baseCooldown / (1 + (w.level - 1) * 0.15)) * globalCooldownMult;
+            ((def.baseCooldown / (1 + (w.level - 1) * 0.15)) *
+              globalCooldownMult) *
+            berserkCooldownMult;
           w.cooldownTimer = cooldown;
 
           const damage = Math.round(
             def.baseDamage *
               (1 + (w.level - 1) * 0.28) *
               globalDamageMult *
+              berserkDamageMult *
+              morningBoostMult *
               (Math.random() < globalCritChance ? 2 : 1),
           );
 
@@ -521,6 +564,51 @@ export function TamagotchiSurvivors({
         }
       });
 
+      // Tesla Coil Discharge
+      if (activeBuff === "TESLA") {
+        teslaTimerRef.current -= dt;
+        if (teslaTimerRef.current <= 0) {
+          teslaTimerRef.current = 3.2;
+          const candidates = enemiesRef.current
+            .filter((en) => Math.hypot(en.x - player.x, en.y - player.y) <= 300)
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+            )
+            .slice(0, 5);
+
+          candidates.forEach((en) => {
+            const teslaDmg = Math.round(90 * globalDamageMult * morningBoostMult);
+            en.hp -= teslaDmg;
+            addFloatingText(`⚡${teslaDmg}`, en.x, en.y - 14, "#00f0ff");
+            lightningBoltsRef.current.push({
+              x1: player.x,
+              y1: player.y,
+              x2: en.x,
+              y2: en.y,
+              life: 0.18,
+            });
+          });
+
+          if (candidates.length > 0) {
+            playSound("tesla", tamagotchi.soundEnabled);
+          }
+        }
+      }
+
+      // Update FX timers
+      reflectRingsRef.current.forEach((ring) => {
+        ring.radius += 360 * dt;
+        ring.life -= dt;
+      });
+      reflectRingsRef.current = reflectRingsRef.current.filter((r) => r.life > 0);
+
+      lightningBoltsRef.current.forEach((bolt) => {
+        bolt.life -= dt;
+      });
+      lightningBoltsRef.current = lightningBoltsRef.current.filter((b) => b.life > 0);
+
       // Update Projectiles
       projectilesRef.current.forEach((proj) => {
         proj.lifeTime -= dt;
@@ -621,8 +709,43 @@ export function TamagotchiSurvivors({
 
         // Attack Player on touch
         if (dist < en.radius + 14) {
-          player.hp -= en.damage * dt * 2.2;
+          const dmgFactor = activeBuff === "QUANTUM_RISK" ? 1.4 : 1.0;
+          player.hp -= en.damage * dt * 2.2 * dmgFactor;
           setCurrentHp(Math.max(0, Math.round(player.hp)));
+
+          // Blademail reflection
+          if (activeBuff === "BLADEMAIL") {
+            blademailTimerRef.current -= dt;
+            if (blademailTimerRef.current <= 0) {
+              blademailTimerRef.current = 0.16;
+              const reflectDmg = Math.max(
+                35,
+                Math.round(en.damage * 3.5 * globalDamageMult),
+              );
+              enemiesRef.current.forEach((nearby) => {
+                const nd = Math.hypot(nearby.x - player.x, nearby.y - player.y);
+                if (nd <= 160) {
+                  nearby.hp -= reflectDmg;
+                  nearby.x += ((nearby.x - player.x) / (nd || 1)) * 32;
+                  nearby.y += ((nearby.y - player.y) / (nd || 1)) * 32;
+                  addFloatingText(
+                    `⚡${reflectDmg}`,
+                    nearby.x,
+                    nearby.y - 12,
+                    "#ff0055",
+                  );
+                }
+              });
+              reflectRingsRef.current.push({
+                x: player.x,
+                y: player.y,
+                radius: 12,
+                maxRadius: 160,
+                life: 0.22,
+              });
+              playSound("reflect", tamagotchi.soundEnabled);
+            }
+          }
 
           if (player.hp <= 0) {
             // Check revive
@@ -650,6 +773,19 @@ export function TamagotchiSurvivors({
         if (en.hp <= 0) {
           killsRef.current += 1;
           setKills(killsRef.current);
+
+          // Vampirism / Nanite Drain heal
+          if (activeBuff === "VAMPIRISM") {
+            const drainAmount = en.isBoss ? 100 : en.glyph === "🛡️" ? 15 : 2;
+            player.hp = Math.min(player.maxHp, player.hp + drainAmount);
+            setCurrentHp(Math.round(player.hp));
+            addFloatingText(
+              `+${drainAmount} HP`,
+              player.x,
+              player.y - 18,
+              "#00ff66",
+            );
+          }
 
           // Drop item
           const dropRoll = Math.random();
@@ -916,6 +1052,65 @@ export function TamagotchiSurvivors({
         }
       }
 
+      // Draw Berserk Aura
+      if (activeBuff === "BERSERK") {
+        const hpRatio = player.hp / Math.max(1, player.maxHp);
+        if (hpRatio < 0.5) {
+          ctx.strokeStyle = "rgba(255, 68, 0, 0.75)";
+          ctx.lineWidth = hpRatio < 0.25 ? 3 : 2;
+          ctx.beginPath();
+          ctx.arc(
+            player.x,
+            player.y,
+            20 + Math.sin(runSecondsRef.current * 14) * 5,
+            0,
+            Math.PI * 2,
+          );
+          ctx.stroke();
+
+          ctx.fillStyle = "#ff4400";
+          ctx.font = "bold 9px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("ЯРОСТЬ", player.x, player.y - 24);
+        }
+      }
+
+      // Draw Blademail Reflect Rings
+      reflectRingsRef.current.forEach((ring) => {
+        ctx.strokeStyle = `rgba(255, 0, 85, ${ring.life * 4.5})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let sp = 0; sp < 8; sp++) {
+          const ang = (sp * Math.PI * 2) / 8;
+          ctx.beginPath();
+          ctx.moveTo(
+            ring.x + Math.cos(ang) * (ring.radius * 0.65),
+            ring.y + Math.sin(ang) * (ring.radius * 0.65),
+          );
+          ctx.lineTo(
+            ring.x + Math.cos(ang) * ring.radius,
+            ring.y + Math.sin(ang) * ring.radius,
+          );
+          ctx.stroke();
+        }
+      });
+
+      // Draw Tesla Lightning Bolts
+      lightningBoltsRef.current.forEach((bolt) => {
+        ctx.strokeStyle = `rgba(0, 240, 255, ${bolt.life * 5.5})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(bolt.x1, bolt.y1);
+        const midX = (bolt.x1 + bolt.x2) / 2 + (Math.random() - 0.5) * 24;
+        const midY = (bolt.y1 + bolt.y2) / 2 + (Math.random() - 0.5) * 24;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(bolt.x2, bolt.y2);
+        ctx.stroke();
+      });
+
       // Draw Floating Damage Texts
       floatingTextsRef.current.forEach((ft) => {
         ctx.fillStyle = ft.color;
@@ -936,6 +1131,8 @@ export function TamagotchiSurvivors({
     isGameOver,
     tamagotchi.theme,
     tamagotchi.soundEnabled,
+    tamagotchi.morningBoostUntil,
+    activeBuff,
     maxHp,
     globalDamageMult,
     globalCooldownMult,
@@ -951,12 +1148,21 @@ export function TamagotchiSurvivors({
 
   // Finish run handler
   const handleCompleteRun = () => {
+    const multiplier = activeBuff === "QUANTUM_RISK" ? 3 : 1;
+    const morningExpMult =
+      tamagotchi.morningBoostUntil && tamagotchi.morningBoostUntil > Date.now()
+        ? 1.25
+        : 1.0;
+
+    const baseExp = killsRef.current * 4 + levelRef.current * 15;
+    const totalExp = Math.floor(baseExp * multiplier * morningExpMult);
+
     onFinishRun({
       survivedTime: runSecondsRef.current,
       enemiesKilled: killsRef.current,
       levelReached: levelRef.current,
-      bytesGathered: bytesRef.current,
-      expGathered: killsRef.current * 4 + levelRef.current * 15,
+      bytesGathered: bytesRef.current * multiplier,
+      expGathered: totalExp,
       won: runWon,
     });
   };
@@ -982,6 +1188,28 @@ export function TamagotchiSurvivors({
             <span className="text-[0.62rem] font-bold text-yellow-400">
               💰 {bytesCollected} B
             </span>
+          </div>
+
+          {/* Active Overclock & Morning Boost */}
+          <div className="flex items-center gap-1.5">
+            {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
+              <span
+                className="px-1.5 py-0.5 border text-[0.52rem] font-black uppercase tracking-wider flex items-center gap-1"
+                style={{
+                  borderColor: COMBAT_BUFFS[activeBuff].color,
+                  color: COMBAT_BUFFS[activeBuff].color,
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                }}
+              >
+                <span>{COMBAT_BUFFS[activeBuff].glyph}</span>
+                <span>{COMBAT_BUFFS[activeBuff].tag}</span>
+              </span>
+            )}
+            {morningBoostActive && (
+              <span className="px-1 py-0.5 border border-cyan-400 text-[0.48rem] font-black text-cyan-300 bg-cyan-950/40">
+                ⚡ +25% EXP
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
