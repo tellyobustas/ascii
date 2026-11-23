@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { renderVectorText } from "@/lib/ascii/vector-font";
 import {
   BRAILLE_DOT_MAP,
   BRAILLE_UNICODE_OFFSET,
@@ -213,25 +214,46 @@ function renderOsdHud(options: {
     `<path d="M ${svgNumber(width - inset)} ${svgNumber(height - inset - bracketSize)} L ${svgNumber(width - inset)} ${svgNumber(height - inset)} L ${svgNumber(width - inset - bracketSize)} ${svgNumber(height - inset)}" fill="none" stroke="${fg}" stroke-width="${strokeW}"/>`,
   );
 
-  const monoFont = "ui-monospace, 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace, sans-serif";
-
   if (options.osdStyle === "camcorder") {
     const fontSize = Math.max(9, Math.min(13, Math.round(width * 0.016)));
+    const charW = fontSize * 0.62;
     parts.push(
       `<circle cx="${svgNumber(inset + bracketSize + 14)}" cy="${svgNumber(inset + fontSize * 0.6)}" r="3.5" fill="#ff0055"/>`,
     );
     parts.push(
-      `<text x="${svgNumber(inset + bracketSize + 22)}" y="${svgNumber(inset + fontSize)}" font-family="${monoFont}" font-size="${fontSize}" font-weight="700" fill="#ff0055" letter-spacing="1.5">REC</text>`,
+      renderVectorText({
+        charHeight: fontSize,
+        charWidth: charW,
+        color: "#ff0055",
+        text: "REC",
+        x: inset + bracketSize + 22,
+        y: inset + 1,
+      }),
     );
     parts.push(
-      `<text x="${svgNumber(inset + bracketSize + 64)}" y="${svgNumber(inset + fontSize)}" font-family="${monoFont}" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1">SP 0:00:04</text>`,
+      renderVectorText({
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: sub,
+        text: "SP 0:00:04",
+        x: inset + bracketSize + 58,
+        y: inset + 2,
+      }),
     );
     const battX = width - inset - bracketSize - 22;
     const battY = inset + fontSize * 0.15;
     const battW = 16;
     const battH = 8;
     parts.push(
-      `<text x="${svgNumber(battX - 6)}" y="${svgNumber(inset + fontSize)}" text-anchor="end" font-family="${monoFont}" font-size="${svgNumber(fontSize * 0.88)}" fill="${fg}" letter-spacing="1">STEREO 48kHz</text>`,
+      renderVectorText({
+        align: "right",
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: fg,
+        text: "STEREO 48KHZ",
+        x: battX - 6,
+        y: inset + 2,
+      }),
       `<rect x="${svgNumber(battX)}" y="${svgNumber(battY)}" width="${svgNumber(battW)}" height="${svgNumber(battH)}" rx="1.5" fill="none" stroke="${fg}" stroke-width="1.2"/>`,
       `<rect x="${svgNumber(battX + battW)}" y="${svgNumber(battY + battH * 0.25)}" width="1.5" height="${svgNumber(battH * 0.5)}" rx="0.5" fill="${fg}"/>`,
       `<rect x="${svgNumber(battX + 2.2)}" y="${svgNumber(battY + 1.8)}" width="3" height="${svgNumber(battH - 3.6)}" fill="${fg}"/>`,
@@ -239,24 +261,70 @@ function renderOsdHud(options: {
       `<rect x="${svgNumber(battX + 11.4)}" y="${svgNumber(battY + 1.8)}" width="3" height="${svgNumber(battH - 3.6)}" fill="${fg}" opacity="0.25"/>`,
     );
     parts.push(
-      `<text x="${svgNumber(inset + 10)}" y="${svgNumber(height - inset - 5)}" font-family="${monoFont}" font-size="${svgNumber(fontSize * 0.88)}" fill="${fg}" letter-spacing="1.2">OCT.24.2001 02:47:19</text>`,
+      renderVectorText({
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: fg,
+        text: "OCT.24.2001 02:47:19",
+        x: inset + 10,
+        y: height - inset - fontSize - 2,
+      }),
     );
     parts.push(
-      `<text x="${svgNumber(width - inset - 10)}" y="${svgNumber(height - inset - 5)}" text-anchor="end" font-family="${monoFont}" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1.2">ASCIILOGRAPH Y2K</text>`,
+      renderVectorText({
+        align: "right",
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: sub,
+        text: "ASCIILOGRAPH Y2K",
+        x: width - inset - 10,
+        y: height - inset - fontSize - 2,
+      }),
     );
   } else if (options.osdStyle === "cyber") {
     const fontSize = Math.max(9, Math.min(13, Math.round(width * 0.016)));
+    const charW = fontSize * 0.62;
     parts.push(
-      `<text x="${svgNumber(inset + bracketSize + 8)}" y="${svgNumber(inset + fontSize)}" font-family="${monoFont}" font-size="${fontSize}" fill="${fg}" letter-spacing="2">SYS_SIG: ONLINE [100%]</text>`,
+      renderVectorText({
+        charHeight: fontSize,
+        charWidth: charW,
+        color: fg,
+        text: "SYS_SIG: ONLINE [100%]",
+        x: inset + bracketSize + 8,
+        y: inset + 1,
+      }),
     );
     parts.push(
-      `<text x="${svgNumber(width - inset - bracketSize - 8)}" y="${svgNumber(inset + fontSize)}" text-anchor="end" font-family="${monoFont}" font-size="${fontSize}" fill="${sub}" letter-spacing="1.5">CH-02 // DITHER</text>`,
+      renderVectorText({
+        align: "right",
+        charHeight: fontSize,
+        charWidth: charW,
+        color: sub,
+        text: "CH-02 // DITHER",
+        x: width - inset - bracketSize - 8,
+        y: inset + 1,
+      }),
     );
     parts.push(
-      `<text x="${svgNumber(inset + 10)}" y="${svgNumber(height - inset - 5)}" font-family="${monoFont}" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1.2">RAW BITSTREAM // 2000s</text>`,
+      renderVectorText({
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: sub,
+        text: "RAW BITSTREAM // 2000S",
+        x: inset + 10,
+        y: height - inset - fontSize - 2,
+      }),
     );
     parts.push(
-      `<text x="${svgNumber(width - inset - 10)}" y="${svgNumber(height - inset - 5)}" text-anchor="end" font-family="${monoFont}" font-size="${fontSize * 0.88}" fill="${fg}" letter-spacing="1.2">ASCIILOGRAPH</text>`,
+      renderVectorText({
+        align: "right",
+        charHeight: fontSize * 0.88,
+        charWidth: charW * 0.88,
+        color: fg,
+        text: "ASCIILOGRAPH",
+        x: width - inset - 10,
+        y: height - inset - fontSize - 2,
+      }),
     );
   }
 

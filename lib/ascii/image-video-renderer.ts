@@ -19,6 +19,7 @@ import {
   type RenderImageAsciiOptions,
   type Rgb,
 } from "@/lib/ascii/image-renderer";
+import { renderVectorText } from "@/lib/ascii/vector-font";
 
 export type RenderedAsciiImageVideo = {
   asciiText: string;
@@ -315,11 +316,16 @@ function renderGlitchOverlay(
   const frameSub = String((frameIndex % 10) * 3).padStart(2, "0");
   const timecode = `SP 0:00:0${second}:${frameSub}`;
   parts.push(
-    `<g opacity="0.85"><text x="${svgNumber(
-      width * 0.5,
-    )}" y="${svgNumber(
-      height - 10,
-    )}" font-family="ui-monospace, monospace, sans-serif" font-size="10" fill="#00f0ff" text-anchor="middle" letter-spacing="1.5">${timecode}</text></g>`,
+    renderVectorText({
+      align: "center",
+      charHeight: 10,
+      charWidth: 6.2,
+      color: "#00f0ff",
+      opacity: 0.85,
+      text: timecode,
+      x: width * 0.5,
+      y: height - 16,
+    }),
   );
 
   return `<g style="mix-blend-mode:screen">${parts.join("\n")}</g>`;
