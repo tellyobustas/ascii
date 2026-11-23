@@ -1,4 +1,25 @@
-export type PetStage = "EGG" | "BABY" | "TEEN" | "ADULT" | "OVERCLOCK";
+export type PetStage =
+  | "EGG"
+  | "NIBBLE"
+  | "SPARK"
+  | "IMP"
+  | "PROTO_DAEMON"
+  | "DAEMON_CORE"
+  | "CYBER_ARMOR"
+  | "NEO_OVERLORD"
+  | "OMEGA_DEITY";
+
+export const STAGE_NAMES_RU: Record<PetStage, string> = {
+  EGG: "Ядро данных (Яйцо)",
+  NIBBLE: "Байт-малыш",
+  SPARK: "Кибер-спарк",
+  IMP: "Нео-бес",
+  PROTO_DAEMON: "Прото-демон",
+  DAEMON_CORE: "ASCIILOGRAPH Ядро",
+  CYBER_ARMOR: "Бронированный демон",
+  NEO_OVERLORD: "Кибер-повелитель",
+  OMEGA_DEITY: "Омега-демон (Сверхбог)",
+};
 
 export type PetMood =
   | "ECSTATIC"
@@ -9,6 +30,17 @@ export type PetMood =
   | "SICK"
   | "SLEEPING"
   | "PANIC";
+
+export const MOOD_NAMES_RU: Record<PetMood, string> = {
+  ECSTATIC: "ЭКСТАЗ ♥",
+  HAPPY: "СЧАСТЛИВ ★",
+  NORMAL: "В СЕТИ ●",
+  HUNGRY: "ГОЛОДЕН ⚡",
+  DIRTY: "ЗАСОРЕН ⚠",
+  SICK: "ВИРУС ☠",
+  SLEEPING: "СПИТ 💤",
+  PANIC: "СБОЙ ЯДРА !!",
+};
 
 export type PetTheme = "green" | "amber" | "cyan" | "magenta" | "white";
 
@@ -78,45 +110,65 @@ export interface FoodItem {
 export const FOOD_MENU: FoodItem[] = [
   {
     id: "byte_snack",
-    name: "DATA PACKET",
+    name: "ДАТА-ПАКЕТ",
     glyph: "[::01::]",
     cost: 0,
-    energyBoost: 15,
+    energyBoost: 20,
     happinessBoost: 5,
     integrityBoost: 0,
-    description: "Lightweight byte stream. Fast snack.",
+    description: "Быстрый перекус байтами. Бесплатно.",
   },
   {
     id: "ram_noodle",
-    name: "RAM CHIP",
+    name: "ЧИП ОЗУ",
     glyph: "[||||||]",
-    cost: 5,
-    energyBoost: 35,
-    happinessBoost: 12,
+    cost: 8,
+    energyBoost: 40,
+    happinessBoost: 15,
     integrityBoost: 5,
-    description: "Nutritious silicon block. Restores memory.",
+    description: "Питательный кремниевый блок. Восстанавливает память.",
   },
   {
     id: "cyber_pizza",
-    name: "PIXEL SLICE",
+    name: "ПИКСЕЛЬ-ПИЦЦА",
     glyph: "<▲#▲>",
-    cost: 10,
-    energyBoost: 45,
-    happinessBoost: 25,
+    cost: 16,
+    energyBoost: 60,
+    happinessBoost: 30,
     integrityBoost: 0,
-    description: "Warm triangular cyber-slice. Boosts mood.",
+    description: "Горячий треугольный слайс. Сильно радует питомца.",
   },
   {
     id: "overclock_core",
-    name: "OVERCLOCK GEL",
+    name: "РАЗГОН-ГЕЛЬ",
     glyph: "{⚡CORE⚡}",
-    cost: 18,
-    energyBoost: 60,
-    happinessBoost: 30,
-    integrityBoost: 15,
-    description: "High-voltage bio-fuel. Maximum boost.",
+    cost: 30,
+    energyBoost: 85,
+    happinessBoost: 45,
+    integrityBoost: 20,
+    description: "Высоковольтный гель. Максимальный заряд и лечение.",
   },
 ];
+
+export interface Quest {
+  id: string;
+  title: string;
+  desc: string;
+  target: number;
+  current: number;
+  rewardBytes: number;
+  rewardExp: number;
+  completed: boolean;
+}
+
+export type HeadAccessory = "NONE" | "VISOR" | "HALO" | "HORNS";
+export type DroneAccessory = "NONE" | "BIT" | "ORB" | "MINI_DEMON";
+
+export interface PetAttributes {
+  cpu: number; // +10% Bytes from games per level
+  ram: number; // +10 Max energy per level (starts at 100)
+  firewall: number; // Reduces bug spawn & virus chance
+}
 
 export interface TamagotchiState {
   name: string;
@@ -124,12 +176,14 @@ export interface TamagotchiState {
   level: number;
   exp: number;
   expToNextLevel: number;
-  hp: number; // 0-100 Integrity
-  energy: number; // 0-100 Charge
-  happiness: number; // 0-100 Sync
-  cleanliness: number; // 0-100 Buffer cleanliness
+  skillPoints: number;
+  attributes: PetAttributes;
+  hp: number; // 0-100 Целостность
+  energy: number; // 0-(100 + ram*10) Заряд
+  happiness: number; // 0-100 Синхронизация
+  cleanliness: number; // 0-100 Чистота буфера
   isSleeping: boolean;
-  bytes: number; // In-game currency
+  bytes: number; // Кибер-валюта
   generation: number;
   birthDate: number;
   lastTick: number;
@@ -140,9 +194,13 @@ export interface TamagotchiState {
   gamesWon: number;
   theme: PetTheme;
   soundEnabled: boolean;
-  poopCount: number; // 0-4 glitch bugs on screen
+  poopCount: number; // 0-4 багов мусора на экране
   hasVirus: boolean;
-  eggWarmCycles: number; // For EGG stage hatching progress (0-5)
+  eggWarmCycles: number; // 0-5
+  headAccessory: HeadAccessory;
+  droneAccessory: DroneAccessory;
+  dailyQuests: Quest[];
+  lastWheelSpin: number; // timestamp
 }
 
-export type MiniGameType = "NONE" | "GUESS" | "BUG_CATCH";
+export type MiniGameType = "NONE" | "HACK" | "BUG_SMASH" | "RUNNER";

@@ -1,88 +1,98 @@
-export type BinaryGuessChoice = "0" | "1";
+// Mini-Games Engine: Memory Hack, Bug Smasher & Bit Runner
 
-export interface BinaryGuessGameState {
-  round: number; // 1 to 3
-  playerScore: number;
-  botScore: number;
-  lastBotChoice: BinaryGuessChoice | null;
-  lastPlayerChoice: BinaryGuessChoice | null;
-  resultMessage: string;
-  isGameOver: boolean;
-  won: boolean;
+// 1. МАТРИЧНЫЙ ВЗЛОМ (Memory Hack / Simon Says)
+export type HackNode = 0 | 1 | 2 | 3; // Альфа, Бета, Гамма, Дельта
+
+export interface HackGameState {
+  sequence: HackNode[];
+  playerInput: HackNode[];
+  round: number; // 1 to 5
+  status: "SHOWING" | "PLAYING" | "SUCCESS" | "FAILED" | "VICTORY";
+  activeHighlight: HackNode | null;
+  message: string;
 }
 
-export function initBinaryGame(): BinaryGuessGameState {
+export function initHackGame(): HackGameState {
+  const firstSeq: HackNode[] = [
+    Math.floor(Math.random() * 4) as HackNode,
+    Math.floor(Math.random() * 4) as HackNode,
+  ];
+
   return {
+    sequence: firstSeq,
+    playerInput: [],
     round: 1,
-    playerScore: 0,
-    botScore: 0,
-    lastBotChoice: null,
-    lastPlayerChoice: null,
-    resultMessage: "Round 1: Guess the pet's binary bit (0 or 1)!",
-    isGameOver: false,
-    won: false,
+    status: "SHOWING",
+    activeHighlight: null,
+    message: "Запомни последовательность кибер-узлов...",
   };
 }
 
-export function playBinaryRound(
-  currentState: BinaryGuessGameState,
-  playerChoice: BinaryGuessChoice,
-): BinaryGuessGameState {
-  if (currentState.isGameOver) return currentState;
+// 2. ОХОТА НА ВИРУСЫ (Whack-a-Bug with Combos & Bombs)
+export type BugCellType = "EMPTY" | "NORMAL" | "GOLD" | "BOMB";
 
-  const botChoice: BinaryGuessChoice = Math.random() > 0.5 ? "1" : "0";
-  const matched = playerChoice === botChoice;
-
-  const newPlayerScore = currentState.playerScore + (matched ? 1 : 0);
-  const newBotScore = currentState.botScore + (matched ? 0 : 1);
-  const nextRound = currentState.round + 1;
-
-  if (nextRound > 3) {
-    const playerWon = newPlayerScore >= 2;
-    return {
-      round: 3,
-      playerScore: newPlayerScore,
-      botScore: newBotScore,
-      lastBotChoice: botChoice,
-      lastPlayerChoice: playerChoice,
-      resultMessage: playerWon
-        ? `VICTORY! ${newPlayerScore}-Round win! +15 Sync, +10 Bytes, +25 EXP!`
-        : `MATCH OVER! Pet won ${newBotScore}/3. Good effort! +5 Sync.`,
-      isGameOver: true,
-      won: playerWon,
-    };
-  }
-
-  return {
-    round: nextRound,
-    playerScore: newPlayerScore,
-    botScore: newBotScore,
-    lastBotChoice: botChoice,
-    lastPlayerChoice: playerChoice,
-    resultMessage: matched
-      ? `Match! Pet transmitted [${botChoice}]. Point to you! Next round:`
-      : `Miss! Pet transmitted [${botChoice}]. Next round:`,
-    isGameOver: false,
-    won: false,
-  };
+export interface BugSmashCell {
+  type: BugCellType;
+  id: number;
 }
 
-export interface BugCatchGameState {
-  activeSector: number; // 0-8 (3x3 grid), -1 if none
+export interface BugSmashGameState {
+  grid: BugSmashCell[];
   score: number;
-  timeLeft: number; // in seconds
+  combo: number;
+  maxCombo: number;
+  bonusBytes: number;
+  timeLeft: number; // seconds
   isActive: boolean;
   isGameOver: boolean;
-  won: boolean;
+  message: string;
 }
 
-export function initBugCatchGame(): BugCatchGameState {
+export function initBugSmashGame(): BugSmashGameState {
   return {
-    activeSector: Math.floor(Math.random() * 9),
+    grid: Array.from({ length: 9 }, (_, i) => ({ type: "EMPTY", id: i })),
     score: 0,
-    timeLeft: 12,
+    combo: 1,
+    maxCombo: 1,
+    bonusBytes: 0,
+    timeLeft: 15,
     isActive: true,
     isGameOver: false,
+    message: "Жми на баги! Золотые дают бонусы. БОМБЫ НЕ ТРОГАТЬ!",
+  };
+}
+
+// 3. БИТ-РАННЕР (Data Stream Runner)
+export interface RunnerRow {
+  firewallLane: number; // 0, 1, or 2 (obstacle)
+  coinLane: number; // 0, 1, or 2 (bonus byte), or -1
+}
+
+export interface BitRunnerGameState {
+  playerLane: number; // 0 (left), 1 (center), 2 (right)
+  distance: number;
+  bytesCollected: number;
+  obstaclesDodged: number;
+  rows: RunnerRow[]; // upcoming 4 rows
+  isGameOver: boolean;
+  won: boolean;
+  speedMs: number;
+}
+
+export function initBitRunnerGame(): BitRunnerGameState {
+  return {
+    playerLane: 1,
+    distance: 0,
+    bytesCollected: 0,
+    obstaclesDodged: 0,
+    rows: [
+      { firewallLane: -1, coinLane: 1 },
+      { firewallLane: 0, coinLane: 2 },
+      { firewallLane: 2, coinLane: 0 },
+      { firewallLane: 1, coinLane: -1 },
+    ],
+    isGameOver: false,
     won: false,
+    speedMs: 700,
   };
 }

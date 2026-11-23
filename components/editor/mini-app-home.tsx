@@ -286,7 +286,7 @@ export function MiniAppHome() {
                   tab === "MURMURATION"
                     ? "MURMUR"
                     : tab === "TAMAGOTCHI"
-                      ? "TAMA"
+                      ? "ТАМА"
                       : tab;
 
                 return (
@@ -303,7 +303,11 @@ export function MiniAppHome() {
                     type="button"
                   >
                     <span className="hidden min-[420px]:inline">
-                      {tab === "MURMURATION" ? "MURMUR" : tab}
+                      {tab === "MURMURATION"
+                        ? "MURMUR"
+                        : tab === "TAMAGOTCHI"
+                          ? "ТАМАГОЧИ"
+                          : tab}
                     </span>
                     <span className="min-[420px]:hidden">{shortLabel}</span>
                   </button>
@@ -314,10 +318,12 @@ export function MiniAppHome() {
             <section className="terminal-scanlines mt-3 bg-black/58 p-3 backdrop-blur-[1px]">
               <div className="flex items-center justify-between gap-3 pb-2">
                 <h2 className="text-sm font-black uppercase text-ascii-white/78">
-                  {activeTab} {activeTab === "TAMAGOTCHI" ? "CYBER PET" : "GENERATOR"}
+                  {activeTab === "TAMAGOTCHI"
+                    ? "ТАМАГОЧИ // КИБЕР-ПИТОМЕЦ"
+                    : `${activeTab} GENERATOR`}
                 </h2>
                 <span className="text-[0.58rem] uppercase text-ascii-green/62">
-                  / {activeLabel}
+                  / {activeTab === "TAMAGOTCHI" ? "тамагочи" : activeLabel}
                 </span>
               </div>
 

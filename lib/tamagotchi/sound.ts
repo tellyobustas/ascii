@@ -8,7 +8,8 @@ function getAudioContext(): AudioContext | null {
     if (!audioCtx) {
       const AudioContextClass =
         window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
       if (AudioContextClass) {
         audioCtx = new AudioContextClass();
       }
@@ -23,7 +24,13 @@ function getAudioContext(): AudioContext | null {
 }
 
 export function triggerHaptic(
-  type: "light" | "medium" | "heavy" | "success" | "warning" | "error" = "light",
+  type:
+    | "light"
+    | "medium"
+    | "heavy"
+    | "success"
+    | "warning"
+    | "error" = "light",
 ) {
   if (typeof window === "undefined") return;
   try {
@@ -52,7 +59,11 @@ export function playSound(
     | "error"
     | "sleep"
     | "gameWin"
-    | "gameLose",
+    | "gameLose"
+    | "combo"
+    | "bomb"
+    | "coin"
+    | "spin",
   enabled = true,
 ) {
   if (!enabled) return;
@@ -80,14 +91,77 @@ export function playSound(
         break;
       }
 
+      case "coin": {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(987.77, now); // B5
+        osc.frequency.setValueAtTime(1318.51, now + 0.06); // E6
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.16);
+        triggerHaptic("light");
+        break;
+      }
+
+      case "combo": {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+        triggerHaptic("medium");
+        break;
+      }
+
+      case "bomb": {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+        triggerHaptic("error");
+        break;
+      }
+
+      case "spin": {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.08);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+        break;
+      }
+
       case "pet": {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.setValueAtTime(523.25, now); // C5
-        osc.frequency.linearRampToValueAtTime(659.25, now + 0.06); // E5
-        osc.frequency.linearRampToValueAtTime(783.99, now + 0.12); // G5
-        osc.frequency.linearRampToValueAtTime(1046.5, now + 0.18); // C6
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.linearRampToValueAtTime(659.25, now + 0.06);
+        osc.frequency.linearRampToValueAtTime(783.99, now + 0.12);
+        osc.frequency.linearRampToValueAtTime(1046.5, now + 0.18);
         gain.gain.setValueAtTime(0.12, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
         osc.connect(gain);
@@ -237,6 +311,6 @@ export function playSound(
       }
     }
   } catch {
-    // Audio context may fail if blocked by browser policy before first interaction
+    // Audio context may fail if blocked by browser policy
   }
 }
