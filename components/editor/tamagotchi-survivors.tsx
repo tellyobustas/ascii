@@ -132,14 +132,14 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
   const ownedWeaponIds = currentWeapons.map((w) => w.id);
   const allWeaponIds = Object.keys(WEAPON_REGISTRY);
 
-  // Option to upgrade existing weapon
+  // Upgrade existing weapon
   currentWeapons.forEach((w) => {
     const def = WEAPON_REGISTRY[w.id];
     if (def && w.level < 5) {
       cards.push({
         id: `upgrade_${w.id}_${w.level + 1}`,
         title: `${def.nameRu} [УР. ${w.level + 1}]`,
-        desc: `Увеличивает урон на +25% и расширяет зону поражения.`,
+        desc: "+25% урона и радиуса",
         glyph: def.glyph,
         type: "UPGRADE_WEAPON",
         weaponId: w.id,
@@ -147,7 +147,7 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
     }
   });
 
-  // Option to acquire new weapon (if under 6 weapons)
+  // Acquire new weapon (up to 6 weapons)
   if (ownedWeaponIds.length < 6) {
     allWeaponIds.forEach((id) => {
       if (!ownedWeaponIds.includes(id)) {
@@ -166,35 +166,34 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
     });
   }
 
-  // Passive bonus options
+  // Passive upgrades
   cards.push(
     {
       id: "passive_damage",
-      title: "ПРОТОКОЛ АТАКИ",
-      desc: "+20% ко всему урону оружия.",
+      title: "АТАКА",
+      desc: "+20% к урону оружия",
       glyph: "⚔️",
       type: "PASSIVE",
       passiveStat: "DAMAGE",
     },
     {
       id: "passive_speed",
-      title: "ТУРБО-УСКОРЕНИЕ",
-      desc: "+15% к скорости перемещения.",
+      title: "СКОРОСТЬ",
+      desc: "+15% к скорости бега",
       glyph: "👟",
       type: "PASSIVE",
       passiveStat: "SPEED",
     },
     {
       id: "passive_heal",
-      title: "НАНО-РЕМОНТ",
-      desc: "Мгновенно восстанавливает 50% здоровья.",
+      title: "ЛЕЧЕНИЕ",
+      desc: "+50% здоровья",
       glyph: "💊",
       type: "PASSIVE",
       passiveStat: "MAX_HP",
     },
   );
 
-  // Shuffle and pick 3
   const shuffled = [...cards].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, 3);
 }
@@ -250,7 +249,7 @@ export function TamagotchiSurvivors({
   const [kills, setKills] = useState(0);
   const [bytesCollected, setBytesCollected] = useState(0);
 
-  // Throttling references to prevent lag
+  // Throttling references
   const lastReportedSecondRef = useRef(-1);
   const lastReportedHpRef = useRef(maxHp);
   const lastHpReportTimeRef = useRef(0);
@@ -258,23 +257,14 @@ export function TamagotchiSurvivors({
   const lastReportedBytesRef = useRef(0);
   const lastReportedExpRef = useRef(0);
 
-  // In-run Level up state
+  // Level up & Game over state
   const [isLevelingUp, setIsLevelingUp] = useState(false);
   const [upgradeCards, setUpgradeCards] = useState<UpgradeCard[]>([]);
-
-  // Game over state
   const [isGameOver, setIsGameOver] = useState(false);
   const [runWon, setRunWon] = useState(false);
-  const [morningBoostActive] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return Boolean(
-      tamagotchi.morningBoostUntil &&
-        tamagotchi.morningBoostUntil > Date.now(),
-    );
-  });
 
-  // Virtual Joystick state
-  const joystickCenterRef = useRef<{ x: number; y: number } | null>(null);
+  // Virtual Joystick & Drag Controls state
+  const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
   const joystickOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isJoystickActive, setIsJoystickActive] = useState(false);
   const [joystickThumb, setJoystickThumb] = useState<{ x: number; y: number }>({
@@ -401,66 +391,67 @@ export function TamagotchiSurvivors({
     };
   }, []);
 
-  // Joystick touch/mouse event handlers
-  const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    joystickCenterRef.current = { x: centerX, y: centerY };
+  // Universal Touch / Drag Controls: Works on the joystick AND anywhere on the screen!
+  const updateControlVector = (
+    clientX: number,
+    clientY: number,
+    originX: number,
+    originY: number,
+  ) => {
+    const dx = clientX - originX;
+    const dy = clientY - originY;
+    const dist = Math.hypot(dx, dy);
+    const maxRadius = 38;
+    const clampedDist = Math.min(dist, maxRadius);
+    const angle = Math.atan2(dy, dx);
+    const thumbX = Math.cos(angle) * clampedDist;
+    const thumbY = Math.sin(angle) * clampedDist;
+
+    joystickOffsetRef.current = {
+      x: thumbX / maxRadius,
+      y: thumbY / maxRadius,
+    };
+    setJoystickThumb({ x: thumbX, y: thumbY });
     setIsJoystickActive(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-
-    const dx = e.clientX - centerX;
-    const dy = e.clientY - centerY;
-    const dist = Math.hypot(dx, dy);
-    const maxRadius = 38;
-    const clampedDist = Math.min(dist, maxRadius);
-    const angle = Math.atan2(dy, dx);
-    const thumbX = Math.cos(angle) * clampedDist;
-    const thumbY = Math.sin(angle) * clampedDist;
-
-    joystickOffsetRef.current = {
-      x: thumbX / maxRadius,
-      y: thumbY / maxRadius,
-    };
-    setJoystickThumb({ x: thumbX, y: thumbY });
   };
 
-  const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!joystickCenterRef.current) return;
-    const { x: centerX, y: centerY } = joystickCenterRef.current;
-    const dx = e.clientX - centerX;
-    const dy = e.clientY - centerY;
-    const dist = Math.hypot(dx, dy);
-    const maxRadius = 38;
-    const clampedDist = Math.min(dist, maxRadius);
-    const angle = Math.atan2(dy, dx);
-    const thumbX = Math.cos(angle) * clampedDist;
-    const thumbY = Math.sin(angle) * clampedDist;
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement)?.closest("button")) return;
 
-    joystickOffsetRef.current = {
-      x: thumbX / maxRadius,
-      y: thumbY / maxRadius,
-    };
-    setJoystickThumb({ x: thumbX, y: thumbY });
-  };
-
-  const handleJoystickPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    joystickCenterRef.current = null;
-    joystickOffsetRef.current = { x: 0, y: 0 };
-    setIsJoystickActive(false);
-    setJoystickThumb({ x: 0, y: 0 });
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignore
+    const joystickElem = document.getElementById("survivors-joystick");
+    if (joystickElem && (e.target as HTMLElement)?.closest("#survivors-joystick")) {
+      const rect = joystickElem.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      dragOriginRef.current = { x: cx, y: cy };
+      updateControlVector(e.clientX, e.clientY, cx, cy);
+    } else {
+      dragOriginRef.current = { x: e.clientX, y: e.clientY };
+      updateControlVector(e.clientX, e.clientY, e.clientX, e.clientY);
     }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragOriginRef.current) return;
+    updateControlVector(
+      e.clientX,
+      e.clientY,
+      dragOriginRef.current.x,
+      dragOriginRef.current.y,
+    );
+  };
+
+  const handlePointerUp = () => {
+    dragOriginRef.current = null;
+    joystickOffsetRef.current = { x: 0, y: 0 };
+    setJoystickThumb({ x: 0, y: 0 });
+    setIsJoystickActive(false);
   };
 
   // Helper to trigger floating text
   const addFloatingText = (text: string, x: number, y: number, color = "#fff") => {
-    if (floatingTextsRef.current.length > 35) {
-      floatingTextsRef.current.splice(0, 6);
+    if (floatingTextsRef.current.length > 25) {
+      floatingTextsRef.current.splice(0, 5);
     }
     floatingTextsRef.current.push({
       id: nextEntityIdRef.current++,
@@ -468,7 +459,7 @@ export function TamagotchiSurvivors({
       x,
       y,
       color,
-      lifeTime: 0.8,
+      lifeTime: 0.7,
     });
   };
 
@@ -603,7 +594,6 @@ export function TamagotchiSurvivors({
 
           // Execute Weapon Logic
           if (w.id === "cyber_blade") {
-            // Melee Slash Arc
             playSound("pet", tamagotchi.soundEnabled);
             const slashAngle = Math.atan2(player.facingY, player.facingX);
             const slashRange = def.baseArea * globalAreaMult;
@@ -643,7 +633,6 @@ export function TamagotchiSurvivors({
               pierce: 999,
             });
           } else if (w.id === "laser_beam") {
-            // Ranged Laser to nearest enemy
             let closestEn: EnemyEntity | null = null;
             let closestDist = 550;
             enemiesRef.current.forEach((en) => {
@@ -673,7 +662,6 @@ export function TamagotchiSurvivors({
               playSound("click", tamagotchi.soundEnabled);
             }
           } else if (w.id === "glitch_darts") {
-            // Homing darts
             const count = def.baseCount + Math.floor(w.level / 2);
             for (let i = 0; i < count; i++) {
               const spreadAngle =
@@ -693,7 +681,6 @@ export function TamagotchiSurvivors({
               });
             }
           } else if (w.id === "shockwave") {
-            // Radial Shockwave
             const shockRadius = def.baseArea * globalAreaMult;
             enemiesRef.current.forEach((en) => {
               const d = Math.hypot(en.x - player.x, en.y - player.y);
@@ -791,7 +778,6 @@ export function TamagotchiSurvivors({
         const spawnDelay = Math.max(0.18, 0.85 - timeSec * 0.0035);
         spawnTimerRef.current = spawnDelay;
 
-        // Spawn smoothly outside visible zoomed-out camera viewport
         const spawnAngle = Math.random() * Math.PI * 2;
         const spawnDist = 720 + Math.random() * 160;
         const ex = player.x + Math.cos(spawnAngle) * spawnDist;
@@ -836,7 +822,7 @@ export function TamagotchiSurvivors({
           radius = 36;
           color = "#ff007f";
           playSound("bomb", tamagotchi.soundEnabled);
-          addFloatingText("ВНИМАНИЕ: СИСТЕМНЫЙ БОСС!", player.x, player.y - 70, "#ff007f");
+          addFloatingText("ВНИМАНИЕ: БОСС!", player.x, player.y - 70, "#ff007f");
         }
 
         enemiesRef.current.push({
@@ -861,7 +847,6 @@ export function TamagotchiSurvivors({
         const dy = player.y - en.y;
         const dist = Math.hypot(dx, dy);
 
-        // Cull distant zombies to save CPU
         if (dist > 2200) {
           en.x = player.x + (dx / dist) * 750;
           en.y = player.y + (dy / dist) * 750;
@@ -870,7 +855,6 @@ export function TamagotchiSurvivors({
           en.y += (dy / dist) * en.speed * dt;
         }
 
-        // Attack Player on touch
         if (dist < en.radius + 18) {
           const dmgFactor = activeBuff === "QUANTUM_RISK" ? 1.4 : 1.0;
           player.hp -= en.damage * dt * 2.2 * dmgFactor;
@@ -936,7 +920,6 @@ export function TamagotchiSurvivors({
         if (en.hp <= 0) {
           killsRef.current += 1;
 
-          // Vampirism / Nanite Drain heal
           if (activeBuff === "VAMPIRISM") {
             const drainAmount = en.isBoss ? 120 : en.type === "TANK" ? 18 : 3;
             player.hp = Math.min(player.maxHp, player.hp + drainAmount);
@@ -948,7 +931,6 @@ export function TamagotchiSurvivors({
             );
           }
 
-          // Drop item
           const dropRoll = Math.random();
           if (dropRoll < 0.12) {
             dropsRef.current.push({
@@ -981,7 +963,7 @@ export function TamagotchiSurvivors({
 
           if (en.isBoss) {
             playSound("gameWin", tamagotchi.soundEnabled);
-            addFloatingText("БОСС УНИЧТОЖЕН! +50 БАЙТОВ", en.x, en.y, "#ffcc00");
+            addFloatingText("БОСС ПОВЕРЖЕН! +50 B", en.x, en.y, "#ffcc00");
             bytesRef.current += 50;
           }
         } else {
@@ -1224,9 +1206,7 @@ export function TamagotchiSurvivors({
         }
       });
 
-      // ==========================================
       // Draw Player Hero (Exact User Tamagotchi in ASCII!)
-      // ==========================================
       let combatMood: PetMood = "NORMAL";
       if (player.hp <= player.maxHp * 0.25) {
         combatMood = "PANIC";
@@ -1322,56 +1302,26 @@ export function TamagotchiSurvivors({
       ctx.fill();
       ctx.restore();
 
-      // ==========================================
-      // Prominent Floating ASCII Health Bar above Player
-      // ==========================================
+      // Sleek Floating ASCII Health Bar above Player (uncluttered)
       const currentHpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
       const hpColor =
         currentHpRatio < 0.25 ? "#ff2244" : currentHpRatio < 0.5 ? "#ffaa00" : "#00ff66";
-      const barTopY = petStartY - (accessories.headGlyph ? 28 : 16) - 14;
+      const hpTextY = petStartY - (accessories.headGlyph ? 18 : 12);
 
-      // Dark high-contrast badge
-      const badgeW = 96;
-      const badgeH = 22;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.88)";
-      ctx.strokeStyle = hpColor;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(
-        player.x - badgeW / 2,
-        barTopY - 10,
-        badgeW,
-        badgeH,
-        4,
-      );
-      ctx.fill();
-      ctx.stroke();
+      const totalBlocks = 8;
+      const filledBlocks = Math.round(currentHpRatio * totalBlocks);
+      const emptyBlocks = totalBlocks - filledBlocks;
+      const asciiHp = "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
 
-      // Progress bar inside badge
-      const hpBarW = badgeW - 8;
-      const hpBarH = 5;
-      const hpBarX = player.x - hpBarW / 2;
-      const hpBarY = barTopY + 2;
-
-      ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-      ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
-
-      ctx.fillStyle = hpColor;
-      ctx.shadowColor = hpColor;
-      ctx.shadowBlur = 8;
-      ctx.fillRect(hpBarX, hpBarY, hpBarW * currentHpRatio, hpBarH);
-      ctx.shadowBlur = 0;
-
-      // Numeric HP text
-      ctx.font = "bold 9px monospace";
-      ctx.fillStyle = "#ffffff";
+      ctx.save();
+      ctx.font = "bold 10px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(
-        `${Math.round(player.hp)} / ${player.maxHp} HP`,
-        player.x,
-        barTopY - 4,
-      );
+      ctx.fillStyle = hpColor;
+      ctx.shadowColor = hpColor;
+      ctx.shadowBlur = 6;
+      ctx.fillText(`[${asciiHp}] ${Math.round(player.hp)}`, player.x, hpTextY);
+      ctx.restore();
 
       // Draw Orbiting Blades if weapon is active
       const orbitWep = weaponsRef.current.find((w) => w.id === "orbit_shards");
@@ -1414,7 +1364,7 @@ export function TamagotchiSurvivors({
           ctx.fillStyle = "#ff4400";
           ctx.font = "bold 9px monospace";
           ctx.textAlign = "center";
-          ctx.fillText("ЯРОСТЬ", player.x, player.y - 36);
+          ctx.fillText("ЯРОСТЬ", player.x, player.y - 32);
         }
       }
 
@@ -1523,47 +1473,42 @@ export function TamagotchiSurvivors({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none">
-      {/* Top HUD: Time, Kills, Level, Health */}
-      <div className="relative z-10 flex flex-col border-b border-white/20 bg-black/95 p-2 text-xs touch-none select-none">
+    <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="fixed inset-0 h-[100dvh] max-h-[100dvh] z-50 flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
+    >
+      {/* Sleek Minimal Top HUD */}
+      <div className="relative z-20 flex flex-col border-b border-white/20 bg-black/90 px-3 py-1.5 text-xs touch-none select-none">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-sm text-yellow-400">
+          <div className="flex items-center gap-2.5 font-bold">
+            <span className="text-yellow-400 text-sm font-black">
               ⏱ {formatTime(runTime)}
             </span>
-            <span className="text-[0.62rem] text-white/60">
+            <span className="text-white/70 text-[0.70rem]">
               💀 {kills}
             </span>
-            <span className="text-[0.62rem] font-bold text-yellow-400">
-              💰 {bytesCollected} B
+            <span className="text-yellow-400 text-[0.70rem]">
+              💰 {bytesCollected}
             </span>
-          </div>
-
-          {/* Active Overclock & Morning Boost */}
-          <div className="flex items-center gap-1.5">
             {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
               <span
-                className="px-1.5 py-0.5 border text-[0.52rem] font-black uppercase tracking-wider flex items-center gap-1"
+                className="px-1.5 py-0.2 border text-[0.55rem] font-black uppercase"
                 style={{
                   borderColor: COMBAT_BUFFS[activeBuff].color,
                   color: COMBAT_BUFFS[activeBuff].color,
-                  backgroundColor: "rgba(0,0,0,0.6)",
                 }}
               >
-                <span>{COMBAT_BUFFS[activeBuff].glyph}</span>
-                <span>{COMBAT_BUFFS[activeBuff].tag}</span>
-              </span>
-            )}
-            {morningBoostActive && (
-              <span className="px-1 py-0.5 border border-cyan-400 text-[0.48rem] font-black text-cyan-300 bg-cyan-950/40">
-                ⚡ +25% EXP
+                {COMBAT_BUFFS[activeBuff].nameRu}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             <span
-              className="px-1.5 py-0.5 border text-[0.62rem] font-black"
+              className="px-1.5 py-0.2 border text-[0.65rem] font-black"
               style={{
                 borderColor: themeColors.primary,
                 color: themeColors.primary,
@@ -1574,17 +1519,16 @@ export function TamagotchiSurvivors({
             <button
               onClick={onClose}
               type="button"
-              className="px-2 py-0.5 text-xs text-white/60 hover:text-white"
+              className="text-white/50 hover:text-white text-xs px-1"
             >
               [✕]
             </button>
           </div>
         </div>
 
-        {/* Prominent High-Visibility Health Bar */}
-        <div className="mt-1 flex items-center gap-2 font-mono">
-          <span className="text-[0.65rem] font-black text-white/80">ХП:</span>
-          <div className="relative h-4 flex-1 bg-black overflow-hidden border border-white/40 shadow-inner">
+        {/* Unified Slim HP Bar with integrated cyan EXP underline */}
+        <div className="mt-1 flex flex-col gap-0.5">
+          <div className="relative h-3 w-full bg-black/80 border border-white/30 overflow-hidden">
             <div
               className="h-full transition-all duration-150"
               style={{
@@ -1595,21 +1539,14 @@ export function TamagotchiSurvivors({
                     : currentHp < maxHp * 0.5
                     ? "#ffaa00"
                     : themeColors.primary,
-                boxShadow: `0 0 10px ${
-                  currentHp < maxHp * 0.25 ? "#ff2244" : themeColors.glow
-                }`,
               }}
             />
-            <div className="absolute inset-0 flex items-center justify-center text-[0.62rem] font-black tracking-wider text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-              {currentHp} / {maxHp} [{Math.round((currentHp / maxHp) * 100)}%]
+            <div className="absolute inset-0 flex items-center justify-center text-[0.58rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              HP {currentHp}/{maxHp}
             </div>
           </div>
-        </div>
-
-        {/* In-run EXP Bar */}
-        <div className="mt-1 flex items-center gap-2 text-[0.52rem]">
-          <span className="text-white/40">EXP:</span>
-          <div className="h-1 flex-1 bg-white/10">
+          {/* Razor-thin EXP line (0 to 100%) */}
+          <div className="h-0.5 w-full bg-white/10 overflow-hidden">
             <div
               className="h-full bg-cyan-400 transition-all duration-100"
               style={{
@@ -1617,9 +1554,6 @@ export function TamagotchiSurvivors({
               }}
             />
           </div>
-          <span className="text-cyan-400 font-bold">
-            {runExp}/{expToNext}
-          </span>
         </div>
       </div>
 
@@ -1630,41 +1564,43 @@ export function TamagotchiSurvivors({
       >
         <canvas
           ref={canvasRef}
-          className="h-full w-full block touch-none select-none"
+          className="absolute inset-0 w-full h-full block z-0 touch-none select-none pointer-events-none"
         />
 
         {/* Bottom Center Virtual Joystick (360°) */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-auto touch-none select-none">
+        <div
+          id="survivors-joystick"
+          className="absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto touch-none select-none"
+        >
           <div
-            onPointerDown={handleJoystickPointerDown}
-            onPointerMove={handleJoystickPointerMove}
-            onPointerUp={handleJoystickPointerUp}
-            onPointerCancel={handleJoystickPointerUp}
-            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/60 backdrop-blur-sm touch-none transition-opacity select-none"
+            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/75 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.8)] touch-none select-none"
             style={{
               borderColor: isJoystickActive
                 ? themeColors.primary
-                : "rgba(255, 255, 255, 0.25)",
+                : "rgba(255, 255, 255, 0.35)",
               boxShadow: isJoystickActive
-                ? `0 0 15px ${themeColors.glow}`
+                ? `0 0 16px ${themeColors.glow}`
                 : undefined,
             }}
           >
+            {/* 4-way crosshair indicators for 360° tactile orientation */}
+            <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[1px] bg-white/20 pointer-events-none" />
+            <div className="absolute inset-y-2 left-1/2 -translate-x-1/2 w-[1px] bg-white/20 pointer-events-none" />
+
             {/* Joystick Thumb Button */}
             <div
-              className="h-10 w-10 rounded-full border-2 transition-transform duration-75 pointer-events-none select-none"
+              className="h-11 w-11 rounded-full border-2 flex items-center justify-center transition-transform duration-75 pointer-events-none select-none shadow-md"
               style={{
                 transform: `translate(${joystickThumb.x}px, ${joystickThumb.y}px)`,
                 borderColor: themeColors.primary,
                 backgroundColor: isJoystickActive
                   ? themeColors.primary
-                  : "rgba(0, 255, 102, 0.3)",
+                  : "rgba(0, 255, 102, 0.35)",
               }}
-            />
+            >
+              <div className="h-2 w-2 rounded-full bg-white opacity-90" />
+            </div>
           </div>
-          <p className="mt-1 text-center font-mono text-[0.48rem] text-white/40 uppercase tracking-widest pointer-events-none select-none">
-            ДЖОЙСТИК (360°)
-          </p>
         </div>
       </div>
 
@@ -1679,21 +1615,21 @@ export function TamagotchiSurvivors({
             }}
           >
             <div className="text-center pb-2 border-b border-white/20">
-              <span className="text-sm font-black text-yellow-400 animate-pulse">
-                ⚡ НОВЫЙ УРОВЕНЬ РЕЙДА! ⚡
+              <span className="text-xs font-black text-yellow-400">
+                ⚡ НОВЫЙ УРОВЕНЬ
               </span>
-              <p className="text-[0.60rem] text-white/60 mt-0.5">
-                Выбери модуль улучшения для продолжения боя
+              <p className="text-[0.55rem] text-white/50 mt-0.5">
+                Выбери улучшение
               </p>
             </div>
 
-            <div className="my-3 flex flex-col gap-2.5">
+            <div className="my-2.5 flex flex-col gap-2">
               {upgradeCards.map((card) => (
                 <button
                   key={card.id}
                   onClick={() => handleSelectUpgrade(card)}
                   type="button"
-                  className="flex items-center gap-3 border p-3 text-left transition hover:bg-white/10 active:scale-95 bg-black/60"
+                  className="flex items-center gap-3 border p-2.5 text-left transition hover:bg-white/10 active:scale-95 bg-black/60"
                   style={{ borderColor: themeColors.border }}
                 >
                   <span className="text-2xl">{card.glyph}</span>
@@ -1719,41 +1655,39 @@ export function TamagotchiSurvivors({
       {isGameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md">
           <div
-            className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-5 shadow-2xl font-mono text-center"
+            className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-4 shadow-2xl font-mono text-center"
             style={{
               borderColor: runWon ? themeColors.primary : "#ff3333",
               boxShadow: `0 0 30px ${runWon ? themeColors.glow : "rgba(255, 50, 50, 0.4)"}`,
             }}
           >
             <h2
-              className="text-base font-black uppercase tracking-widest"
+              className="text-sm font-black uppercase tracking-wider"
               style={{ color: runWon ? themeColors.primary : "#ff3333" }}
             >
-              {runWon ? "✦ РЕЙД ЗАВЕРШЕН ПОБЕДОЙ! ✦" : "☠ СИСТЕМА УНИЧТОЖЕНА ☠"}
+              {runWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ"}
             </h2>
-            <p className="text-[0.62rem] text-white/60 mt-1">
-              {runWon
-                ? "Ты выжил и очистил сектор от вредоносного ПО!"
-                : "Питомец пал в бою. Но собранные данные сохранены!"}
+            <p className="text-[0.55rem] text-white/60 mt-0.5">
+              {runWon ? "Сектор очищен!" : "Данные боя сохранены"}
             </p>
 
-            <div className="my-4 grid grid-cols-2 gap-2 border border-white/10 bg-black/60 p-3 text-xs">
+            <div className="my-3 grid grid-cols-2 gap-2 border border-white/10 bg-black/60 p-2.5 text-xs">
               <div className="flex flex-col text-left">
-                <span className="text-white/40 text-[0.55rem]">ВРЕМЯ БОЯ</span>
+                <span className="text-white/40 text-[0.52rem]">ВРЕМЯ</span>
                 <span className="font-bold text-yellow-400">
                   {formatTime(runTime)}
                 </span>
               </div>
               <div className="flex flex-col text-right">
-                <span className="text-white/40 text-[0.55rem]">УБИТО ВРАГОВ</span>
+                <span className="text-white/40 text-[0.52rem]">УБИТО</span>
                 <span className="font-bold text-white">{kills}</span>
               </div>
-              <div className="flex flex-col text-left mt-2">
-                <span className="text-white/40 text-[0.55rem]">УРОВЕНЬ РЕЙДА</span>
+              <div className="flex flex-col text-left mt-1.5">
+                <span className="text-white/40 text-[0.52rem]">УРОВЕНЬ</span>
                 <span className="font-bold text-cyan-400">УР. {runLevel}</span>
               </div>
-              <div className="flex flex-col text-right mt-2">
-                <span className="text-white/40 text-[0.55rem]">ДОБЫТО БАЙТОВ</span>
+              <div className="flex flex-col text-right mt-1.5">
+                <span className="text-white/40 text-[0.52rem]">БАЙТЫ</span>
                 <span className="font-bold text-yellow-400">
                   +{bytesCollected} B
                 </span>
@@ -1763,14 +1697,14 @@ export function TamagotchiSurvivors({
             <button
               onClick={handleCompleteRun}
               type="button"
-              className="w-full border py-3 text-xs font-black uppercase tracking-widest transition active:scale-95"
+              className="w-full border py-2.5 text-xs font-black uppercase tracking-wider transition active:scale-95"
               style={{
                 borderColor: themeColors.primary,
                 backgroundColor: themeColors.primary,
                 color: "#000",
               }}
             >
-              ПЕРЕДАТЬ НАГРАДЫ ТАМАГОЧИ
+              ЗАБРАТЬ НАГРАДЫ
             </button>
           </div>
         </div>

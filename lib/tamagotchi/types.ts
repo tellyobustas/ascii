@@ -13,15 +13,15 @@ export type PetStage =
   | "OMEGA_DEITY";
 
 export const STAGE_NAMES_RU: Record<PetStage, string> = {
-  EGG: "Ядро данных (Яйцо)",
+  EGG: "Яйцо",
   NIBBLE: "Байт-малыш",
-  SPARK: "Кибер-спарк",
-  IMP: "Нео-бес",
+  SPARK: "Спарк",
+  IMP: "Имп",
   PROTO_DAEMON: "Прото-демон",
-  DAEMON_CORE: "ASCIILOGRAPH Ядро",
-  CYBER_ARMOR: "Бронированный демон",
-  NEO_OVERLORD: "Кибер-повелитель",
-  OMEGA_DEITY: "Омега-демон (Сверхбог)",
+  DAEMON_CORE: "Ядро демона",
+  CYBER_ARMOR: "Броня демона",
+  NEO_OVERLORD: "Оверлорд",
+  OMEGA_DEITY: "Омега-демон",
 };
 
 export type PetMood =

@@ -61,7 +61,7 @@ export function TamagotchiBuffModal({
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+        <div className="flex items-center justify-between border-b border-white/10 pb-2">
           <div className="flex items-center gap-2">
             <span className="text-base">⚡</span>
             <div>
@@ -69,17 +69,17 @@ export function TamagotchiBuffModal({
                 className="text-xs font-black tracking-widest uppercase"
                 style={{ color: themeColors.primary }}
               >
-                АРСЕНАЛ ОВЕРКЛОКОВ // БОЕВЫЕ МОДУЛИ
+                БОЕВЫЕ ЧИПЫ
               </span>
               <p className="text-[0.52rem] text-white/50 tracking-wide">
-                Активируй 1 боевой стимулятор на следующий рейд Survivors
+                Чип действует 1 рейд
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-black text-yellow-400 font-mono">
-              БАЛАНС: {state.bytes} B
+              {state.bytes} B
             </span>
             <button
               onClick={() => {
@@ -97,7 +97,7 @@ export function TamagotchiBuffModal({
         {/* Текущий статус */}
         <div className="mt-2.5 flex items-center justify-between bg-white/5 border border-white/10 p-2 text-[0.58rem]">
           <span className="text-white/60">
-            АКТИВНЫЙ МОДУЛЬ:{" "}
+            ЧИП:{" "}
             <span
               className="font-black"
               style={{
@@ -106,7 +106,7 @@ export function TamagotchiBuffModal({
             >
               {activeBuff !== "NONE"
                 ? `${COMBAT_BUFFS[activeBuff].glyph} ${COMBAT_BUFFS[activeBuff].nameRu}`
-                : "НЕ ВЫБРАН (СТАНДАРТ)"}
+                : "НЕТ"}
             </span>
           </span>
           {activeBuff !== "NONE" && (

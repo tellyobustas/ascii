@@ -558,9 +558,9 @@ export function TamagotchiGenerator() {
   return (
     <div className="flex flex-col gap-3 font-mono">
       {/* Верхний кибер-дэк HUD */}
-      <div className="grid grid-cols-3 gap-2 border border-white/10 bg-black/60 p-2.5 text-[0.62rem] uppercase tracking-wider">
+      <div className="grid grid-cols-3 gap-2 border border-white/10 bg-black/60 p-2 text-[0.62rem] uppercase tracking-wider">
         <div className="flex flex-col">
-          <span className="text-white/40">УРОВЕНЬ И ОПЫТ</span>
+          <span className="text-white/40">УРОВЕНЬ</span>
           <span className="font-bold text-ascii-white">
             УР.{state.level} [{state.exp}/{state.expToNextLevel}]
           </span>
@@ -578,7 +578,7 @@ export function TamagotchiGenerator() {
         <div className="flex flex-col text-center">
           <span className="text-white/40">БАЛАНС</span>
           <span className="font-bold text-yellow-400">
-            {state.bytes} <span className="text-[0.52rem]">БАЙТОВ</span>
+            {state.bytes} B
           </span>
           <span className="text-[0.52rem] text-white/50">
             GEN {state.generation}
@@ -614,7 +614,7 @@ export function TamagotchiGenerator() {
                   : "rgba(255,255,255,0.4)",
               }}
             >
-              {state.soundEnabled ? "SFX: ВКЛ" : "SFX: ВЫКЛ"}
+              {state.soundEnabled ? "SFX" : "MUTE"}
             </button>
           </div>
         </div>
@@ -639,11 +639,11 @@ export function TamagotchiGenerator() {
       />
 
       {/* Шкалы параметров состояния */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black/60 p-2.5 border border-white/10">
-        {/* Целостность / HP */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black/60 p-2 border border-white/10">
+        {/* ХП */}
         <div className="flex flex-col">
           <div className="flex justify-between text-[0.58rem] uppercase font-bold text-white/70">
-            <span>ЦЕЛОСТНОСТЬ</span>
+            <span>ХП</span>
             <span
               style={{
                 color: state.hp < 30 ? "#ff5555" : themeColors.primary,
@@ -664,16 +664,16 @@ export function TamagotchiGenerator() {
           </div>
         </div>
 
-        {/* Заряд / Энергия */}
+        {/* ЭНЕРГИЯ */}
         <div className="flex flex-col">
           <div className="flex justify-between text-[0.58rem] uppercase font-bold text-white/70">
-            <span>ЗАРЯД ЭНЕРГИИ</span>
+            <span>ЭНЕРГИЯ</span>
             <span
               style={{
                 color: state.energy < 25 ? "#ffaa00" : themeColors.primary,
               }}
             >
-              {state.energy} / {maxEnergy}
+              {state.energy}/{maxEnergy}
             </span>
           </div>
           <div className="mt-1 h-1.5 w-full bg-white/10">
@@ -688,10 +688,10 @@ export function TamagotchiGenerator() {
           </div>
         </div>
 
-        {/* Синхронизация / Настроение */}
+        {/* РАДОСТЬ */}
         <div className="flex flex-col">
           <div className="flex justify-between text-[0.58rem] uppercase font-bold text-white/70">
-            <span>СИНХРОНИЗАЦИЯ</span>
+            <span>РАДОСТЬ</span>
             <span
               style={{
                 color:
@@ -713,10 +713,10 @@ export function TamagotchiGenerator() {
           </div>
         </div>
 
-        {/* Чистота буфера */}
+        {/* ЧИСТОТА */}
         <div className="flex flex-col">
           <div className="flex justify-between text-[0.58rem] uppercase font-bold text-white/70">
-            <span>БУФЕР КЭША</span>
+            <span>ЧИСТОТА</span>
             <span
               style={{
                 color:
@@ -751,116 +751,74 @@ export function TamagotchiGenerator() {
       </div>
 
       {/* ============================================================== */}
-      {/* ГЛАВНАЯ ИГРА: КИБЕР-РЕЙД // VAMPIRE SURVIVORS ROGUE-LITE       */}
+      {/* ГЛАВНАЯ ИГРА: КИБЕР-РЕЙД // SURVIVORS ROGUE-LITE                */}
       {/* ============================================================== */}
       <div
-        className="relative overflow-hidden border-2 bg-gradient-to-b from-black/95 via-black/85 to-black/95 p-3.5 shadow-2xl transition"
+        className="relative overflow-hidden border-2 bg-black/90 p-3 shadow-2xl transition"
         style={{
           borderColor: themeColors.primary,
-          boxShadow: `0 0 25px ${themeColors.glow}`,
+          boxShadow: `0 0 20px ${themeColors.glow}`,
         }}
       >
-        {/* Фоновые декоративные элементы */}
-        <div className="absolute -right-4 -top-4 select-none text-[3.5rem] font-black opacity-5 pointer-events-none text-white">
-          SURVIVOR
-        </div>
-
-        {/* Заголовок с бейджем ГЛАВНАЯ ИГРА */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+        {/* Заголовок и рекорд */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-2">
           <div className="flex items-center gap-2">
             <span className="text-base">⚔️</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs font-black tracking-widest uppercase"
-                  style={{ color: themeColors.primary }}
-                >
-                  КИБЕР-РЕЙД // SURVIVORS
-                </span>
-                <span className="bg-red-500/20 text-red-400 border border-red-500/40 text-[0.48rem] font-black px-1.5 py-0.5 tracking-wider animate-pulse uppercase">
-                  ★ ОСНОВНАЯ ИГРА ★
-                </span>
-              </div>
-              <p className="text-[0.52rem] text-white/50 tracking-wide mt-0.5">
-                Rogue-lite арена: 360° джойстик, ближний и дальний бой, орды багов и боссы
-              </p>
-            </div>
+            <span
+              className="text-xs font-black tracking-widest uppercase"
+              style={{ color: themeColors.primary }}
+            >
+              КИБЕР-РЕЙД
+            </span>
           </div>
 
-          {/* Рекорд */}
-          <div className="text-right">
-            <span className="text-[0.48rem] uppercase text-white/40 block">РЕКОРД ВЫЖИВАНИЯ</span>
-            <span className="text-[0.62rem] font-black text-amber-400 font-mono">
-              ⏱ {state.bestSurvivorTime ?? 0}с / 👾 {state.bestSurvivorKills ?? 0} КИЛЛОВ
+          <div className="text-right text-[0.55rem] text-white/50">
+            <span>РЕКОРД: </span>
+            <span className="font-bold text-amber-400 font-mono">
+              ⏱ {state.bestSurvivorTime ?? 0}с / 💀 {state.bestSurvivorKills ?? 0}
             </span>
           </div>
         </div>
 
-        {/* Сводка боевых характеристик тамагочи */}
-        <div className="mt-2.5 grid grid-cols-3 gap-2 bg-white/5 border border-white/10 p-2 text-center text-[0.55rem]">
-          <div className="flex flex-col">
-            <span className="text-white/40 uppercase">БОЕВОЕ HP</span>
-            <span className="font-black text-xs text-green-400 font-mono mt-0.5">
-              {combatHp}
-            </span>
-            <span className="text-[0.46rem] text-white/40 mt-0.5">
-              СТАДИЯ + RAM + ДРЕВО
-            </span>
+        {/* Боевые параметры (в 1 компактную строку) */}
+        <div className="mt-2 grid grid-cols-3 gap-1 bg-white/5 border border-white/10 p-1.5 text-center text-[0.60rem] font-bold">
+          <div>
+            <span className="text-white/40 text-[0.50rem] block">ХП</span>
+            <span className="text-green-400">{combatHp}</span>
           </div>
-
-          <div className="flex flex-col border-x border-white/10">
-            <span className="text-white/40 uppercase">СКОРОСТЬ БЕГА</span>
-            <span className="font-black text-xs text-cyan-400 font-mono mt-0.5">
-              {combatSpeed}
-            </span>
-            <span className="text-[0.46rem] text-white/40 mt-0.5">
-              УРОВЕНЬ + ДРЕВО
-            </span>
+          <div className="border-x border-white/10">
+            <span className="text-white/40 text-[0.50rem] block">СКОРОСТЬ</span>
+            <span className="text-cyan-400">{combatSpeed}</span>
           </div>
-
-          <div className="flex flex-col">
-            <span className="text-white/40 uppercase">ХИЛ АПТЕЧКИ</span>
-            <span className="font-black text-xs text-yellow-400 font-mono mt-0.5">
-              +{combatMedkitHeal} HP
-            </span>
-            <span className="text-[0.46rem] text-white/40 mt-0.5">
-              ФАЕРВОЛ + ДРЕВО
-            </span>
+          <div>
+            <span className="text-white/40 text-[0.50rem] block">АПТЕЧКА</span>
+            <span className="text-yellow-400">+{combatMedkitHeal}</span>
           </div>
         </div>
 
-        {/* Слот активного оверклока (баффа на 1 бой) */}
-        <div className="mt-2.5 flex items-center justify-between border border-white/10 bg-black/60 p-2 text-xs">
+        {/* Активный чип */}
+        <div className="mt-2 flex items-center justify-between border border-white/10 bg-black/60 px-2.5 py-1.5 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-base">
+            <span>
               {state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
                 ? COMBAT_BUFFS[state.activeCombatBuff].glyph
                 : "⚡"}
             </span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[0.48rem] text-white/50 uppercase">
-                  РАЗГОННЫЙ ЧИП (НА 1 РЕЙД):
-                </span>
-                {state.activeCombatBuff && state.activeCombatBuff !== "NONE" && (
-                  <span className="text-[0.46rem] px-1 py-0.2 border text-green-400 border-green-500/40">
-                    АКТИВЕН
-                  </span>
-                )}
-              </div>
-              <p
-                className="text-[0.62rem] font-black uppercase mt-0.5"
+            <div className="flex items-center gap-1.5 text-[0.60rem]">
+              <span className="text-white/50 uppercase">ЧИП:</span>
+              <span
+                className="font-bold uppercase"
                 style={{
                   color:
                     state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
                       ? COMBAT_BUFFS[state.activeCombatBuff].color
-                      : "rgba(255,255,255,0.7)",
+                      : "#888",
                 }}
               >
                 {state.activeCombatBuff && COMBAT_BUFFS[state.activeCombatBuff]
                   ? COMBAT_BUFFS[state.activeCombatBuff].nameRu
-                  : "БЕЗ ОВЕРКЛОКА (СТАНДАРТ)"}
-              </p>
+                  : "НЕТ"}
+              </span>
             </div>
           </div>
 
@@ -870,7 +828,7 @@ export function TamagotchiGenerator() {
               setShowBuffModal(true);
             }}
             type="button"
-            className="border px-2.5 py-1 text-[0.55rem] font-black uppercase tracking-wider transition hover:bg-white/10"
+            className="border px-2 py-0.5 text-[0.52rem] font-black uppercase transition hover:bg-white/10"
             style={{
               borderColor: state.activeCombatBuff
                 ? themeColors.primary
@@ -878,46 +836,40 @@ export function TamagotchiGenerator() {
               color: state.activeCombatBuff ? themeColors.primary : "#fff",
             }}
           >
-            {state.activeCombatBuff ? "СМЕНИТЬ" : "+ ВЫБРАТЬ БАФФ"}
+            {state.activeCombatBuff ? "СМЕНИТЬ" : "+ ВЫБРАТЬ"}
           </button>
         </div>
 
         {/* Кнопки запуска и прокачки */}
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {/* Кнопка запуска боя */}
+        <div className="mt-2.5 grid grid-cols-3 gap-2">
           <button
             onClick={handleLaunchSurvivors}
             disabled={state.stage === "EGG" || state.hp <= 0 || state.isSleeping}
             type="button"
-            className="sm:col-span-2 group relative overflow-hidden py-2.5 px-3 border-2 font-black text-xs uppercase tracking-widest transition-all duration-200 disabled:opacity-40 flex items-center justify-center gap-2"
+            className="col-span-2 py-2 px-3 border-2 font-black text-xs uppercase tracking-wider transition active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
             style={{
               borderColor: themeColors.primary,
               backgroundColor: themeColors.primary,
               color: "#000",
-              boxShadow: `0 0 15px ${themeColors.glow}`,
+              boxShadow: `0 0 12px ${themeColors.glow}`,
             }}
           >
-            <span className="text-sm">⚔️</span>
-            <span>НАЧАТЬ КИБЕР-РЕЙД (-20⚡)</span>
+            <span>⚔️</span>
+            <span>В БОЙ (-20⚡)</span>
           </button>
 
-          {/* Кнопка открытия древа навыков */}
           <button
             onClick={() => {
               playSound("click", state.soundEnabled);
               setShowSkillTree(true);
             }}
             type="button"
-            className="border border-purple-500/60 bg-purple-950/20 hover:bg-purple-900/30 text-purple-300 py-2 px-3 font-black text-[0.62rem] uppercase tracking-wider transition flex items-center justify-center gap-1.5"
+            className="border border-purple-500/60 bg-purple-950/20 hover:bg-purple-900/30 text-purple-300 py-2 px-2 font-black text-[0.62rem] uppercase tracking-wider transition flex items-center justify-center gap-1"
           >
             <span>🌲</span>
-            <span>ДРЕВО ПРОКАЧКИ</span>
+            <span>ДРЕВО</span>
           </button>
         </div>
-
-        <p className="mt-2 text-[0.48rem] text-white/40 text-center uppercase tracking-wider">
-          💡 Мини-игры внизу пополняют запасы байтов и опыта для прокачки характеристик!
-        </p>
       </div>
 
       {/* Панель основных кнопок действий */}
@@ -932,7 +884,7 @@ export function TamagotchiGenerator() {
           }}
           type="button"
           disabled={state.stage === "EGG" || state.hp <= 0}
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80 disabled:opacity-35"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95 disabled:opacity-35"
           style={{
             borderColor: themeColors.border,
             backgroundColor: showFeedMenu ? themeColors.primary : "transparent",
@@ -940,7 +892,6 @@ export function TamagotchiGenerator() {
           }}
         >
           <span>⚡ КОРМИТЬ</span>
-          <span className="text-[0.48rem] font-normal opacity-80">+ЗАРЯД</span>
         </button>
 
         {/* ИГРЫ */}
@@ -953,7 +904,7 @@ export function TamagotchiGenerator() {
           }}
           type="button"
           disabled={state.stage === "EGG" || state.hp <= 0 || state.isSleeping}
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80 disabled:opacity-35"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95 disabled:opacity-35"
           style={{
             borderColor: themeColors.border,
             backgroundColor: showGameSelect ? themeColors.primary : "transparent",
@@ -961,45 +912,42 @@ export function TamagotchiGenerator() {
           }}
         >
           <span>🎮 ИГРЫ</span>
-          <span className="text-[0.48rem] font-normal opacity-80">АРКАДЫ</span>
         </button>
 
-        {/* ОЧИСТКА */}
+        {/* ЧИСТКА */}
         <button
           onClick={handleClean}
           type="button"
           disabled={state.stage === "EGG" || state.hp <= 0}
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80 disabled:opacity-35"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95 disabled:opacity-35"
           style={{
             borderColor: themeColors.border,
             color: themeColors.primary,
           }}
         >
-          <span>🧹 ОЧИСТКА</span>
-          <span className="text-[0.48rem] font-normal opacity-80">КЭШ (-4⚡)</span>
+          <span>🧹 ЧИСТКА</span>
         </button>
 
-        {/* ДЕБАГ / ЛЕЧЕНИЕ */}
+        {/* ЛЕЧЕНИЕ */}
         <button
           onClick={handleHeal}
           type="button"
           disabled={state.stage === "EGG" || state.hp <= 0}
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80 disabled:opacity-35"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95 disabled:opacity-35"
           style={{
             borderColor: themeColors.border,
             color: themeColors.primary,
           }}
         >
           <span>💊 ЛЕЧЕНИЕ</span>
-          <span className="text-[0.48rem] font-normal opacity-80">АНТИВИРУС</span>
         </button>
 
-        {/* СОН / БОДРСТВОВАНИЕ */}
+        {/* СОН / ПОДЪЕМ */}
         <button
           onClick={handleToggleSleep}
           type="button"
           disabled={state.stage === "EGG" || state.hp <= 0}
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80 disabled:opacity-35"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95 disabled:opacity-35"
           style={{
             borderColor: themeColors.border,
             backgroundColor: state.isSleeping
@@ -1008,8 +956,7 @@ export function TamagotchiGenerator() {
             color: state.isSleeping ? "#00f0ff" : themeColors.primary,
           }}
         >
-          <span>{state.isSleeping ? "☀️ РАЗБУДИТЬ" : "💤 УСНУТЬ"}</span>
-          <span className="text-[0.48rem] font-normal opacity-80">ЗАРЯДКА</span>
+          <span>{state.isSleeping ? "☀️ ПОДЪЕМ" : "💤 СОН"}</span>
         </button>
 
         {/* ПАСПОРТ */}
@@ -1020,14 +967,13 @@ export function TamagotchiGenerator() {
             setShowPassport(true);
           }}
           type="button"
-          className="border min-h-11 flex flex-col items-center justify-center text-[0.62rem] font-black uppercase tracking-wider transition hover:opacity-80"
+          className="border h-10 flex items-center justify-center text-[0.65rem] font-black uppercase tracking-wider transition hover:opacity-80 active:scale-95"
           style={{
             borderColor: themeColors.border,
             color: themeColors.primary,
           }}
         >
           <span>📜 ПАСПОРТ</span>
-          <span className="text-[0.48rem] font-normal opacity-80">ID КАРТА</span>
         </button>
       </div>
 
@@ -1035,7 +981,7 @@ export function TamagotchiGenerator() {
       {state.hp <= 0 && (
         <div className="border-2 border-red-500 bg-red-950/40 p-3 text-center">
           <p className="text-xs font-black text-red-400 uppercase tracking-widest animate-pulse">
-            ⚠ АВАРИЙНЫЙ СБОЙ СИСТЕМЫ (KERNEL PANIC) ⚠
+            ⚠ СБОЙ ЯДРА (KERNEL PANIC) ⚠
           </p>
           <div className="mt-3 flex justify-center gap-3">
             <button
@@ -1043,14 +989,14 @@ export function TamagotchiGenerator() {
               type="button"
               className="bg-red-500 text-black px-4 py-2 font-black text-xs uppercase tracking-wider hover:bg-red-400"
             >
-              ⚡ ДЕФИБРИЛЛЯТОР / РЕБУТ
+              ⚡ ПЕРЕЗАГРУЗКА
             </button>
             <button
               onClick={handleNewGeneration}
               type="button"
               className="border border-red-500 text-red-300 px-4 py-2 font-black text-xs uppercase tracking-wider hover:bg-red-900/40"
             >
-              ✦ НОВОЕ ПОКОЛЕНИЕ (GEN +1)
+              ✦ СЛЕД. ПОКОЛЕНИЕ
             </button>
           </div>
         </div>
