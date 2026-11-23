@@ -56,8 +56,9 @@ function renderFrame(
   frameIndex: number,
   styleId: MurmurationStyleId,
 ) {
-  const style = MURMURATION_STYLES[styleId];
-  const progress = frameIndex / (MURMURATION_LIMITS.durationSeconds * MURMURATION_LIMITS.fps);
+  const style = MURMURATION_STYLES[styleId] ?? MURMURATION_STYLES.signal;
+  const totalFrames = MURMURATION_LIMITS.durationSeconds * MURMURATION_LIMITS.fps;
+  const progress = frameIndex / totalFrames;
   const nodes: string[] = [];
   const trails: string[] = [];
 
@@ -67,35 +68,74 @@ function renderFrame(
     const x = size.paddingX + (cell.column + 0.5 + motion.dx) * size.cellWidth;
     const y = size.paddingY + (cell.row + 0.82 + motion.dy) * size.cellHeight;
     const opacity = Math.min(0.98, 0.28 + motion.opacity * 0.68);
+    const cellColor = motion.color || style.color;
+
     nodes.push(
-      `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" opacity="${opacity.toFixed(3)}">${xml(motion.glyph)}</text>`,
+      `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" fill="${cellColor}" opacity="${opacity.toFixed(3)}">${xml(motion.glyph)}</text>`,
     );
 
-    // A small number of dim edge glyphs detach and rejoin the same silhouette.
+    // Starlings peeling off in wide aerial sweeps (outer whispers of the flock)
     const hash = Math.abs(Math.sin(cell.column * 127.1 + cell.row * 311.7));
-    if (cell.tone < 0.48 && hash > 0.968) {
-      const drift = Math.sin(progress * Math.PI * 2 + cell.phase);
-      const echoX = x + drift * size.cellWidth * 2.1;
-      const echoY = y - Math.cos(progress * Math.PI * 2 + cell.phase) * size.cellHeight * 1.15;
+    if (cell.tone < 0.42 && hash > 0.945) {
+      const trailAngle = progress * Math.PI * 2 + cell.phase;
+      const trailDist = (1.4 + Math.sin(trailAngle * 2) * 0.7) * size.cellWidth * 2.2;
+      const trailX = x + Math.cos(trailAngle) * trailDist;
+      const trailY = y - Math.sin(trailAngle) * size.cellHeight * 1.4;
+      const trailGlyph = (cell.column + cell.row) % 2 === 0 ? "^" : "~";
       trails.push(
-        `<text x="${echoX.toFixed(2)}" y="${echoY.toFixed(2)}" font-size="${(size.fontSize * 0.78).toFixed(2)}" opacity="0.22">${xml(motion.glyph)}</text>`,
+        `<text x="${trailX.toFixed(2)}" y="${trailY.toFixed(2)}" font-size="${(size.fontSize * 0.72).toFixed(2)}" fill="${style.secondaryColor || style.color}" opacity="0.32">${trailGlyph}</text>`,
       );
     }
   }
 
-  const scanlines = Array.from({ length: Math.floor(size.height / 8) }, (_, index) =>
-    `<rect y="${index * 8}" width="${size.width}" height="1"/>`,
-  ).join("");
+  // Corner brackets
+  const inset = Math.max(8, Math.round(size.paddingX * 0.45));
+  const bracketSize = Math.max(12, Math.min(22, Math.round(size.width * 0.03)));
+  const cornerColor = style.secondaryColor || style.color;
+  const corners = [
+    `<path d="M ${inset + bracketSize} ${inset} L ${inset} ${inset} L ${inset} ${inset + bracketSize}" fill="none" stroke="${cornerColor}" stroke-width="1.5"/>`,
+    `<path d="M ${size.width - inset - bracketSize} ${inset} L ${size.width - inset} ${inset} L ${size.width - inset} ${inset + bracketSize}" fill="none" stroke="${cornerColor}" stroke-width="1.5"/>`,
+    `<path d="M ${inset} ${size.height - inset - bracketSize} L ${inset} ${size.height - inset} L ${inset + bracketSize} ${size.height - inset}" fill="none" stroke="${cornerColor}" stroke-width="1.5"/>`,
+    `<path d="M ${size.width - inset} ${size.height - inset - bracketSize} L ${size.width - inset} ${size.height - inset} L ${size.width - inset - bracketSize} ${size.height - inset}" fill="none" stroke="${cornerColor}" stroke-width="1.5"/>`,
+  ].join("");
+
+  const hudHeader = `MURMURATION // ${style.label.toUpperCase()}`;
+  const hudFrame = `BOIDS FLOCK [${String(frameIndex + 1).padStart(2, "0")}/${totalFrames}]`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">
-  <rect width="100%" height="100%" fill="#000000"/>
+  <rect width="100%" height="100%" fill="${style.backgroundColor}"/>
   <defs>
-    <filter id="glow" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${style.glow}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="${style.glow * 0.75}" result="sharpBlur"/>
+      <feGaussianBlur stdDeviation="${style.glow * 2}" result="wideBlur"/>
+      <feMerge>
+        <feMergeNode in="wideBlur" opacity="0.35"/>
+        <feMergeNode in="sharpBlur" opacity="0.65"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="skyVignette" cx="50%" cy="50%" r="72%">
+      <stop offset="48%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#000000" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.72"/>
+    </radialGradient>
+    <pattern id="scanlines" width="1" height="5" patternUnits="userSpaceOnUse">
+      <rect y="0" width="1" height="1.2" fill="#000000" opacity="0.42"/>
+    </pattern>
   </defs>
-  <g fill="${style.color}" font-family="monospace" font-size="${size.fontSize.toFixed(2)}" text-anchor="middle" filter="url(#glow)">${nodes.join("")}</g>
-  <g fill="${style.color}" font-family="monospace" text-anchor="middle">${trails.join("")}</g>
-  <g fill="#ffffff" opacity="0.035">${scanlines}</g>
+  <rect x="1" y="1" width="${size.width - 2}" height="${size.height - 2}" fill="none" stroke="${style.borderColor}" stroke-width="1.5"/>
+  <g font-family="monospace" font-size="${size.fontSize.toFixed(2)}" text-anchor="middle" filter="url(#glow)">${nodes.join("")}</g>
+  <g font-family="monospace" text-anchor="middle">${trails.join("")}</g>
+  <rect width="100%" height="100%" fill="url(#scanlines)"/>
+  <rect width="100%" height="100%" fill="url(#skyVignette)"/>
+  ${corners}
+  <g font-family="monospace" font-size="10" opacity="0.75">
+    <text x="${inset + bracketSize + 6}" y="${inset + 11}" fill="${style.secondaryColor || style.color}" letter-spacing="1.5">${hudHeader}</text>
+    <text x="${size.width - inset - bracketSize - 6}" y="${inset + 11}" text-anchor="end" fill="${style.color}" letter-spacing="1.5">${hudFrame}</text>
+    <text x="${inset + 8}" y="${size.height - inset - 5}" fill="${style.color}" letter-spacing="1.2">OCT.24.2001 // BIRD SWARM</text>
+    <text x="${size.width - inset - 8}" y="${size.height - inset - 5}" text-anchor="end" fill="${style.secondaryColor || style.color}" letter-spacing="1.2">ASCIILOGRAPH</text>
+  </g>
 </svg>`;
 }
 

@@ -81,9 +81,9 @@ const DESKTOP_CONFIG: AsciiCloudBackgroundConfig = {
   fontSizeMin: 9,
   fontSizeMax: 20,
   glyphs: {
-    far: ".·'\"-_",
-    mid: ".·'\"^-_/\\|<>+xo",
-    near: "*+xo01<>/\\",
+    far: ".·'\"-_~",
+    mid: ".·'\"^-_/\\|<>+xo~v",
+    near: "*+xo01<>/\\^v~«»",
   },
   colors: [
     "rgba(0, 255, 120, 0.08)",

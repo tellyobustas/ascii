@@ -103,7 +103,8 @@ function MurmurationPreview({ file, style }: { file: File | null; style: Murmura
       previousFrame = time;
       const rect = canvas.getBoundingClientRect();
       const { width, height } = rect;
-      context.fillStyle = "#000000";
+      const currentStyle = MURMURATION_STYLES[style] ?? MURMURATION_STYLES.signal;
+      context.fillStyle = currentStyle.backgroundColor || "#000000";
       context.fillRect(0, 0, width, height);
       const progress = reducedMotion ? 0.12 : (time % 4000) / 4000;
       const scaleX = width / (map?.size.width ?? width);
@@ -111,27 +112,27 @@ function MurmurationPreview({ file, style }: { file: File | null; style: Murmura
       context.textAlign = "center";
       context.textBaseline = "alphabetic";
       context.font = `${(map?.size.fontSize ?? 16) * scaleY}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      context.shadowBlur = 2.5 * scaleY;
-      context.shadowColor = MURMURATION_STYLES[style].color;
+      context.shadowBlur = 2.8 * scaleY;
+      context.shadowColor = currentStyle.color;
       if (map) {
         for (const cell of map.cells) {
           const motion = getMurmurationMotion(cell, progress, style);
           const x = map.size.paddingX + (cell.column + 0.5 + motion.dx) * map.size.cellWidth;
           const y = map.size.paddingY + (cell.row + 0.82 + motion.dy) * map.size.cellHeight;
           context.globalAlpha = Math.min(0.98, 0.28 + motion.opacity * 0.68);
-          context.fillStyle = MURMURATION_STYLES[style].color;
+          context.fillStyle = motion.color || currentStyle.color;
           context.fillText(motion.glyph, x * scaleX, y * scaleY);
         }
       } else {
         context.font = `${12 * scaleY}px ui-monospace, monospace`;
         context.globalAlpha = 0.32;
-        context.fillStyle = MURMURATION_STYLES[style].color;
-        context.fillText(file ? "MAPPING PORTRAIT" : "SELECT PORTRAIT", width / 2, height / 2);
+        context.fillStyle = currentStyle.color;
+        context.fillText(file ? "MAPPING STARLING SWARM" : "SELECT PORTRAIT", width / 2, height / 2);
       }
       context.globalAlpha = 1;
       context.shadowBlur = 0;
       context.fillStyle = "rgba(255,255,255,0.035)";
-      for (let y = 0; y < height; y += 7) context.fillRect(0, y, width, 1);
+      for (let y = 0; y < height; y += 6) context.fillRect(0, y, width, 1);
       if (!reducedMotion) animationFrame = requestAnimationFrame(draw);
     };
     animationFrame = requestAnimationFrame(draw);
@@ -152,7 +153,7 @@ function MurmurationPreview({ file, style }: { file: File | null; style: Murmura
 
 export function MurmurationGenerator() {
   const [file, setFile] = useState<File | null>(null);
-  const [style, setStyle] = useState<MurmurationStyleId>("signal");
+  const [style, setStyle] = useState<MurmurationStyleId>("starling");
   const [result, setResult] = useState<RenderResponse | null>(null);
   const [status, setStatus] = useState("load portrait");
   const [error, setError] = useState("");
@@ -224,7 +225,7 @@ export function MurmurationGenerator() {
 
   return (
     <div className="mt-4 space-y-3">
-      <p className="text-xs leading-5 text-ascii-white/58">A readable ASCII portrait moves as one flock. The shape stays recognizable while the signal flows through it.</p>
+      <p className="text-xs leading-5 text-ascii-white/58">A living starling murmuration: thousands of flying bird glyphs swoop, bank and ripple in fluid formation to compose your portrait.</p>
       <div className="grid grid-cols-3 gap-2">
         {styleEntries.map(([id, preset]) => <PresetButton active={id === style} key={id} onClick={() => { setStyle(id); setResult(null); setStatus(file ? "style changed" : "load portrait"); }}>{preset.shortLabel}</PresetButton>)}
       </div>

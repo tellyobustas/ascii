@@ -10,31 +10,85 @@ export const MURMURATION_LIMITS = {
 
 export const MURMURATION_GLYPHS = " .,:;irsXA253hMHGS#9B&@";
 
-export type MurmurationStyleId = "signal" | "ghost" | "shatter";
+export type MurmurationStyleId =
+  | "starling"
+  | "cyber"
+  | "solar"
+  | "signal"
+  | "ghost"
+  | "shatter";
 
 export const MURMURATION_STYLES: Record<
   MurmurationStyleId,
-  { label: string; shortLabel: string; color: string; intensity: number; glow: number }
+  {
+    backgroundColor: string;
+    borderColor: string;
+    color: string;
+    glow: number;
+    intensity: number;
+    label: string;
+    secondaryColor: string;
+    shortLabel: string;
+  }
 > = {
+  starling: {
+    label: "Starling flock",
+    shortLabel: "STARLING",
+    color: "#00f0ff",
+    secondaryColor: "#b388ff",
+    backgroundColor: "#050814",
+    borderColor: "rgba(0, 240, 255, 0.4)",
+    intensity: 0.62,
+    glow: 1.5,
+  },
+  cyber: {
+    label: "Cyber swarm",
+    shortLabel: "CYBER",
+    color: "#ccff00",
+    secondaryColor: "#ff007f",
+    backgroundColor: "#0c0317",
+    borderColor: "rgba(204, 255, 0, 0.45)",
+    intensity: 0.72,
+    glow: 1.7,
+  },
+  solar: {
+    label: "Golden dawn",
+    shortLabel: "SOLAR",
+    color: "#ffb700",
+    secondaryColor: "#ff5500",
+    backgroundColor: "#0f0701",
+    borderColor: "rgba(255, 183, 0, 0.45)",
+    intensity: 0.58,
+    glow: 1.45,
+  },
   signal: {
-    label: "Signal portrait",
+    label: "Matrix signal",
     shortLabel: "SIGNAL",
     color: "#00ff66",
-    intensity: 0.34,
+    secondaryColor: "#86ffb2",
+    backgroundColor: "#020704",
+    borderColor: "rgba(0, 255, 102, 0.35)",
+    intensity: 0.45,
     glow: 1.35,
   },
   ghost: {
     label: "Pale ghost",
     shortLabel: "GHOST",
-    color: "#d6ffe5",
-    intensity: 0.2,
-    glow: 0.7,
+    color: "#e0f7fa",
+    secondaryColor: "#80deea",
+    backgroundColor: "#05090c",
+    borderColor: "rgba(224, 247, 250, 0.35)",
+    intensity: 0.36,
+    glow: 1.1,
   },
   shatter: {
     label: "Broken signal",
     shortLabel: "SHATTER",
     color: "#71ffb2",
-    intensity: 0.55,
+    secondaryColor: "#ff0055",
+    backgroundColor: "#050805",
+    borderColor: "rgba(113, 255, 178, 0.4)",
+    intensity: 0.68,
     glow: 1.6,
   },
 };
@@ -159,27 +213,104 @@ export function getMurmurationMotion(
   progress: number,
   styleId: MurmurationStyleId,
 ) {
-  const style = MURMURATION_STYLES[styleId];
+  const style = MURMURATION_STYLES[styleId] ?? MURMURATION_STYLES.signal;
   const cycle = progress * Math.PI * 2;
   const phase = cell.phase;
-  const flowX = Math.sin(cycle + cell.row * 0.085 + phase * 0.12);
-  const flowY = Math.cos(cycle + cell.column * 0.072 + phase * 0.1);
-  const edgeMobility = 0.35 + (1 - cell.tone) * 0.65;
-  let dx = flowX * style.intensity * edgeMobility;
-  const dy = flowY * style.intensity * edgeMobility * 0.52;
+
+  // 1. Sweeping macro-vortex of the flock (large banking maneuvers)
+  const macroX = Math.sin(cycle) * 1.5 + Math.cos(cycle * 2) * 0.5;
+  const macroY = Math.cos(cycle) * 1.0 + Math.sin(cycle * 2) * 0.35;
+
+  // 2. Transverse flock waves (density ripple through bird neighbors)
+  const waveAngle = cycle + (cell.column * 0.09 - cell.row * 0.07);
+  const rippleX = Math.sin(waveAngle * 2 + phase * 0.2) * 0.85;
+  const rippleY = Math.cos(waveAngle * 2 + phase * 0.2) * 0.55;
+
+  // 3. Turbulent boids vortex around contours
+  const eddyAngle = cycle * 2 + phase + cell.row * 0.12;
+  const eddyRadius = (0.25 + Math.pow(1 - cell.tone, 1.2) * 0.75) * style.intensity;
+  const eddyX = Math.cos(eddyAngle) * eddyRadius;
+  const eddyY = Math.sin(eddyAngle) * eddyRadius * 0.7;
+
+  // 4. Flock breathing (natural expansion & compression of swarm)
+  const pulse = 1.0 + Math.sin(cycle * 2) * 0.18;
+  const edgeMobility = 0.3 + Math.pow(1 - cell.tone, 1.3) * 1.4;
+
+  const dx = (macroX * 0.4 + rippleX * 0.5 + eddyX) * style.intensity * edgeMobility * pulse;
+  const dy = (macroY * 0.35 + rippleY * 0.45 + eddyY) * style.intensity * edgeMobility * pulse * 0.75;
+
+  // 5. Flight velocity direction for banking
+  const dCycle = 0.06;
+  const nextMacroX = Math.sin(cycle + dCycle) * 1.5 + Math.cos((cycle + dCycle) * 2) * 0.5;
+  const nextWaveX = Math.sin((waveAngle + dCycle) * 2 + phase * 0.2) * 0.85;
+  const vx = (nextMacroX - macroX) * 0.4 + (nextWaveX - rippleX) * 0.5;
+
+  // 6. Wing-beat stroke cycle (flapping bird wings)
+  const wingBeat = Math.sin(cycle * 6 + phase * 2.5 + cell.column * 0.15);
+
   let glyph = cell.glyph;
+  const isDenseCore = cell.tone > 0.62;
+  const isOuterWhisp = cell.tone < 0.32;
 
   if (styleId === "shatter") {
     const burst = Math.max(0, Math.sin(cycle * 3 - 0.9));
     const hash = Math.abs(Math.sin(cell.column * 41.7 + cell.row * 17.3));
-    if (burst > 0.92 && hash > 0.91) {
-      dx += Math.sign(flowX || 1) * burst * 1.8;
-      glyph = "#$%*@+"[Math.floor(hash * 6)] ?? glyph;
+    if (burst > 0.88 && hash > 0.88) {
+      const glitchChars = "#$%*@+^v<>";
+      glyph = glitchChars[Math.floor(hash * glitchChars.length)] ?? glyph;
+    }
+  } else if (isOuterWhisp) {
+    // Lone starlings banking and gliding in outer ribbons
+    if (wingBeat > 0.45) {
+      glyph = "^"; // Wings up
+    } else if (wingBeat > 0.15) {
+      glyph = vx < -0.05 ? "/" : vx > 0.05 ? "\\" : "~"; // Banking turn
+    } else if (wingBeat > -0.25) {
+      glyph = "-"; // Glide
+    } else if (wingBeat > -0.6) {
+      glyph = "v"; // Wings down
+    } else {
+      glyph = "·"; // Speck
+    }
+  } else if (!isDenseCore) {
+    // Mid-density flock: bird silhouettes
+    if (wingBeat > 0.4) {
+      glyph = "^";
+    } else if (wingBeat > 0.0) {
+      glyph = vx < -0.04 ? "<" : vx > 0.04 ? ">" : "x";
+    } else if (wingBeat > -0.4) {
+      glyph = "v";
+    } else {
+      glyph = "+";
+    }
+  } else {
+    // Dense flock core: tight cluster
+    const coreFlock = "*#@%&8BЖ";
+    const coreIndex = Math.min(
+      coreFlock.length - 1,
+      Math.floor(cell.tone * coreFlock.length),
+    );
+    glyph = coreFlock[coreIndex] ?? "#";
+  }
+
+  let color = style.color;
+  if (style.secondaryColor && (cell.tone < 0.42 || Math.abs(wingBeat) > 0.72)) {
+    const sheenBlend = Math.sin(cycle * 2 + cell.column * 0.2 + phase);
+    if (sheenBlend > 0.32) {
+      color = style.secondaryColor;
     }
   }
 
-  const shimmer = 0.9 + Math.sin(cycle * 2 + phase) * 0.08;
-  return { dx, dy, glyph, opacity: shimmer * (0.5 + cell.tone * 0.5) };
+  const shimmer = 0.88 + Math.sin(cycle * 4 + phase) * 0.12;
+  const opacity = shimmer * (0.42 + cell.tone * 0.58);
+
+  return {
+    color,
+    dx,
+    dy,
+    glyph,
+    opacity,
+  };
 }
 
 export function isMurmurationStyleId(value: string): value is MurmurationStyleId {
