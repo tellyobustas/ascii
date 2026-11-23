@@ -165,7 +165,122 @@ export interface Quest {
 }
 
 export type HeadAccessory = "NONE" | "VISOR" | "HALO" | "HORNS";
+export type BodyAccessory = "NONE" | "EXO_SPINE" | "FORCE_FIELD" | "TESLA_COILS";
 export type DroneAccessory = "NONE" | "BIT" | "ORB" | "MINI_DEMON";
+
+export interface ModuleSpec {
+  id: string;
+  glyph: string;
+  name: string;
+  purpose: string;
+  combatPerk: string;
+  petPerk: string;
+}
+
+export const HEAD_MODULES: Record<HeadAccessory, ModuleSpec> = {
+  NONE: {
+    id: "NONE",
+    glyph: "[ - ]",
+    name: "Без модуля",
+    purpose: "Стандартный сенсор",
+    combatPerk: "Без бонусов",
+    petPerk: "Штатный режим",
+  },
+  VISOR: {
+    id: "VISOR",
+    glyph: "[ ═══ ]",
+    name: "Кибер-визор",
+    purpose: "Тактическая оптика наведения",
+    combatPerk: "+25% Шанс крита (x2.2 урон) и +35% к дальности стрельбы",
+    petPerk: "+15% к опыту (EXP) во всех играх",
+  },
+  HALO: {
+    id: "HALO",
+    glyph: ".-~✦~-.",
+    name: "Неон-нимб",
+    purpose: "Фазовый щит целостности",
+    combatPerk: "Поглощает 1 удар каждые 15с + реген +1 HP/2.5с",
+    petPerk: "Полный иммунитет к вирусам",
+  },
+  HORNS: {
+    id: "HORNS",
+    glyph: "//     \\\\",
+    name: "Рога разгона",
+    purpose: "Оверклок-охлаждение ядра",
+    combatPerk: "+20% Скорость бега и +30% темп стрельбы всех орудий",
+    petPerk: "В 2 раза быстрее сон (регенерация заряда)",
+  },
+};
+
+export const BODY_MODULES: Record<BodyAccessory, ModuleSpec> = {
+  NONE: {
+    id: "NONE",
+    glyph: "[ - ]",
+    name: "Без обвеса",
+    purpose: "Штатный каркас",
+    combatPerk: "Без бонусов",
+    petPerk: "Штатный режим",
+  },
+  EXO_SPINE: {
+    id: "EXO_SPINE",
+    glyph: ">══  ══<",
+    name: "Экзо-крылья",
+    purpose: "Маневровые стабилизаторы",
+    combatPerk: "+30 Радиус сбора лута и отталкивающий импульс при беге",
+    petPerk: "-30% расхода энергии на активность",
+  },
+  FORCE_FIELD: {
+    id: "FORCE_FIELD",
+    glyph: "{ ( · ) }",
+    name: "Силовой каркас",
+    purpose: "Кинетический барьер-отражатель",
+    combatPerk: "-20% входящего урона и 18 урона шипами при ударе",
+    petPerk: "Защита от ночной деградации прогресса",
+  },
+  TESLA_COILS: {
+    id: "TESLA_COILS",
+    glyph: "╒⚡    ⚡╕",
+    name: "Катушки Тесла",
+    purpose: "Генератор цепных разрядов",
+    combatPerk: "Цепная молния по 3 врагам каждые 2.2с (35 урона)",
+    petPerk: "Пассивно генерирует +2 Байта в минуту",
+  },
+};
+
+export const DRONE_MODULES: Record<DroneAccessory, ModuleSpec> = {
+  NONE: {
+    id: "NONE",
+    glyph: "[ - ]",
+    name: "Без дрона",
+    purpose: "Слот спутника свободен",
+    combatPerk: "Без бонусов",
+    petPerk: "Нет спутника",
+  },
+  BIT: {
+    id: "BIT",
+    glyph: "[01]",
+    name: "Бит-дрон",
+    purpose: "Автономный стрелковый сателлит",
+    combatPerk: "Стреляет бинарными залпами [01] каждые 0.75с (28 урона)",
+    petPerk: "+1 Байт за каждый тап по экрану",
+  },
+  ORB: {
+    id: "ORB",
+    glyph: "( ✦ )",
+    name: "Орбитальный шар",
+    purpose: "Плазменный рефлектор снарядов",
+    combatPerk: "Сбивает вражеские пули (снаряды танков и боссов) и режет мобов",
+    petPerk: "Снижает засорение кэша в 2 раза",
+  },
+  MINI_DEMON: {
+    id: "MINI_DEMON",
+    glyph: "/\\^o^/\\",
+    name: "Мини-демон",
+    purpose: "Вампирический фамильяр",
+    combatPerk: "Атакует врагов в радиусе (45 урона) и лечит +3 HP",
+    petPerk: "+25% к выигрышу Байтов в мини-играх",
+  },
+};
 
 export interface PetAttributes {
   cpu: number; // +10% Bytes from games per level
@@ -201,6 +316,7 @@ export interface TamagotchiState {
   hasVirus: boolean;
   eggWarmCycles: number; // 0-5
   headAccessory: HeadAccessory;
+  bodyAccessory?: BodyAccessory;
   droneAccessory: DroneAccessory;
   dailyQuests: Quest[];
   lastWheelSpin: number; // timestamp

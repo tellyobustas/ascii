@@ -203,20 +203,26 @@ export function TamagotchiSurvivors({
   const thumbElemRef = useRef<HTMLDivElement | null>(null);
   const baseElemRef = useRef<HTMLDivElement | null>(null);
 
-  // Stats calculation based on Tamagotchi power
+  // Stats calculation based on Tamagotchi power & Cyber Modules
   const skillTree = tamagotchi.skillTree ?? {};
   const baseStageHp = STAGE_HP_BONUS[tamagotchi.stage] ?? 100;
+  const headHpBonus = tamagotchi.headAccessory === "HALO" ? 30 : 0;
   const maxHp =
     baseStageHp +
     tamagotchi.level * 10 +
     (tamagotchi.attributes?.ram ?? 0) * 15 +
-    (skillTree.MAX_HP ?? 0) * 30;
+    (skillTree.MAX_HP ?? 0) * 30 +
+    headHpBonus;
 
+  const hornSpeedBonus = tamagotchi.headAccessory === "HORNS" ? 35 : 0;
+  const exoSpeedBonus = tamagotchi.bodyAccessory === "EXO_SPINE" ? 20 : 0;
   const baseSpeed =
     195 +
     (STAGE_SPEED_BONUS[tamagotchi.stage] ?? 0) +
     tamagotchi.level * 2 +
-    (skillTree.MOVE_SPEED ?? 0) * 12;
+    (skillTree.MOVE_SPEED ?? 0) * 12 +
+    hornSpeedBonus +
+    exoSpeedBonus;
 
   const medkitHealBase =
     35 +
@@ -229,10 +235,18 @@ export function TamagotchiSurvivors({
     (1 + (skillTree.ATK_POWER ?? 0) * 0.12) *
     (1 + (tamagotchi.attributes?.cpu ?? 0) * 0.05);
 
-  const globalCooldownMult = 1 / (1 + (skillTree.ATK_SPEED ?? 0) * 0.08);
-  const globalCritChance = 0.05 + (skillTree.CRIT_CHANCE ?? 0) * 0.05;
+  const hornCooldownMult = tamagotchi.headAccessory === "HORNS" ? 0.75 : 1.0;
+  const globalCooldownMult =
+    (1 / (1 + (skillTree.ATK_SPEED ?? 0) * 0.08)) * hornCooldownMult;
+
+  const visorCritBonus = tamagotchi.headAccessory === "VISOR" ? 0.25 : 0;
+  const globalCritChance =
+    0.05 + (skillTree.CRIT_CHANCE ?? 0) * 0.05 + visorCritBonus;
+
   const globalAreaMult = 1 + (skillTree.ATK_AREA ?? 0) * 0.1;
-  const magnetRadius = 85 + (skillTree.MAGNET_RADIUS ?? 0) * 30;
+  const exoMagnetBonus = tamagotchi.bodyAccessory === "EXO_SPINE" ? 35 : 0;
+  const magnetRadius =
+    85 + (skillTree.MAGNET_RADIUS ?? 0) * 30 + exoMagnetBonus;
   const byteMultiplier = 1 + (skillTree.BYTE_HARVEST ?? 0) * 0.18;
   const hasRevive = (skillTree.SECOND_CHANCE ?? 0) > 0;
 
@@ -306,6 +320,14 @@ export function TamagotchiSurvivors({
   const blademailTimerRef = useRef(0);
   const teslaTimerRef = useRef(1.5);
   const satelliteShootTimerRef = useRef(2.2);
+
+  // Cyber Modules Realtime State Refs
+  const haloShieldReadyRef = useRef(tamagotchi.headAccessory === "HALO");
+  const haloRechargeTimerRef = useRef(0);
+  const haloHpRegenTimerRef = useRef(0);
+  const teslaModuleTimerRef = useRef(1.8);
+  const droneBitTimerRef = useRef(0.5);
+  const droneDemonTimerRef = useRef(2.5);
 
   // Safe Extraction State Ref
   const extractionRef = useRef({
@@ -802,6 +824,135 @@ export function TamagotchiSurvivors({
         }
       }
 
+      // Cyber Module: HALO (Passive HP Regen + Shield Recharge)
+      if (tamagotchi.headAccessory === "HALO") {
+        haloHpRegenTimerRef.current += dt;
+        if (haloHpRegenTimerRef.current >= 2.5) {
+          haloHpRegenTimerRef.current = 0;
+          if (player.hp < player.maxHp) {
+            player.hp = Math.min(player.maxHp, player.hp + 1);
+          }
+        }
+        if (!haloShieldReadyRef.current) {
+          haloRechargeTimerRef.current -= dt;
+          if (haloRechargeTimerRef.current <= 0) {
+            haloShieldReadyRef.current = true;
+            addFloatingText("✦ ЩИТ ЗАРЯЖЕН ✦", player.x, player.y - 16, "#fbbf24");
+            playSound("hatch", tamagotchi.soundEnabled);
+          }
+        }
+      }
+
+      // Cyber Bodykit: TESLA_COILS (Chain Lightning Discharge)
+      if (tamagotchi.bodyAccessory === "TESLA_COILS") {
+        teslaModuleTimerRef.current -= dt;
+        if (teslaModuleTimerRef.current <= 0) {
+          teslaModuleTimerRef.current = 2.2;
+          const targets = enemiesRef.current
+            .map((e) => ({ e, d: Math.hypot(e.x - player.x, e.y - player.y) }))
+            .filter((item) => item.d < 260)
+            .sort((a, b) => a.d - b.d)
+            .slice(0, 3);
+          targets.forEach(({ e }) => {
+            const teslaDmg = Math.round(35 * globalDamageMult);
+            e.hp -= teslaDmg;
+            addFloatingText(`⚡${teslaDmg}`, e.x, e.y - 12, "#38bdf8");
+            lightningBoltsRef.current.push({
+              x1: player.x,
+              y1: player.y,
+              x2: e.x,
+              y2: e.y,
+              life: 0.15,
+            });
+          });
+          if (targets.length > 0) {
+            playSound("click", tamagotchi.soundEnabled);
+          }
+        }
+      }
+
+      // Cyber Drone: BIT (Targeting Laser Salvo)
+      if (tamagotchi.droneAccessory === "BIT") {
+        droneBitTimerRef.current -= dt;
+        if (droneBitTimerRef.current <= 0) {
+          droneBitTimerRef.current = 0.75;
+          const droneAngle = runSecondsRef.current * 2.8;
+          const dx = player.x + Math.cos(droneAngle) * 44;
+          const dy = player.y + Math.sin(droneAngle) * 30;
+          let closestEn: EnemyEntity | null = null;
+          let closestDist = 240;
+          enemiesRef.current.forEach((e) => {
+            const d = Math.hypot(e.x - dx, e.y - dy);
+            if (d < closestDist) {
+              closestDist = d;
+              closestEn = e;
+            }
+          });
+          if (closestEn) {
+            const target = closestEn as EnemyEntity;
+            const ang = Math.atan2(target.y - dy, target.x - dx);
+            projectilesRef.current.push({
+              id: nextEntityIdRef.current++,
+              weaponId: "satellite_dart",
+              x: dx,
+              y: dy,
+              vx: Math.cos(ang) * 460,
+              vy: Math.sin(ang) * 460,
+              damage: Math.round(28 * globalDamageMult),
+              radius: 6,
+              lifeTime: 0.7,
+              pierce: 1,
+              glyph: "01",
+              color: "#facc15",
+            });
+            playSound("click", tamagotchi.soundEnabled);
+          }
+        }
+      }
+
+      // Cyber Drone: ORB (Enemy Proximity Shred)
+      if (tamagotchi.droneAccessory === "ORB") {
+        const droneAngle = runSecondsRef.current * 2.8;
+        const dx = player.x + Math.cos(droneAngle) * 44;
+        const dy = player.y + Math.sin(droneAngle) * 30;
+        enemiesRef.current.forEach((e) => {
+          if (Math.hypot(e.x - dx, e.y - dy) < e.radius + 16) {
+            e.hp -= 22 * dt * 4;
+          }
+        });
+      }
+
+      // Cyber Drone: MINI_DEMON (Familiar Dive & Leech)
+      if (tamagotchi.droneAccessory === "MINI_DEMON") {
+        droneDemonTimerRef.current -= dt;
+        if (droneDemonTimerRef.current <= 0) {
+          droneDemonTimerRef.current = 3.2;
+          let highestHpEn: EnemyEntity | null = null;
+          let highestHp = 0;
+          enemiesRef.current.forEach((e) => {
+            const d = Math.hypot(e.x - player.x, e.y - player.y);
+            if (d < 250 && e.hp > highestHp) {
+              highestHp = e.hp;
+              highestHpEn = e;
+            }
+          });
+          if (highestHpEn) {
+            const target = highestHpEn as EnemyEntity;
+            target.hp -= 45;
+            player.hp = Math.min(player.maxHp, player.hp + 3);
+            addFloatingText("-45", target.x, target.y - 12, "#f43f5e");
+            addFloatingText("+3 HP", player.x, player.y - 16, "#22c55e");
+            lightningBoltsRef.current.push({
+              x1: player.x,
+              y1: player.y,
+              x2: target.x,
+              y2: target.y,
+              life: 0.12,
+            });
+          }
+        }
+      }
+
       // Update FX timers
       reflectRingsRef.current.forEach((ring) => {
         ring.radius += 360 * dt;
@@ -820,16 +971,43 @@ export function TamagotchiSurvivors({
         proj.x += proj.vx * dt;
         proj.y += proj.vy * dt;
 
-        if (proj.isEnemy) {
+        if (proj.isEnemy && proj.pierce > 0) {
+          // Check if ORB companion absorbs bullet
+          if (tamagotchi.droneAccessory === "ORB") {
+            const droneAngle = runSecondsRef.current * 2.8;
+            const orbX = player.x + Math.cos(droneAngle) * 44;
+            const orbY = player.y + Math.sin(droneAngle) * 30;
+            if (Math.hypot(proj.x - orbX, proj.y - orbY) < 26) {
+              proj.pierce = 0;
+              addFloatingText("*DEFLECT*", orbX, orbY, "#38bdf8");
+              playSound("click", tamagotchi.soundEnabled);
+              return;
+            }
+          }
+
           // Enemy projectile hitting player (respects i-frames!)
           const d = Math.hypot(proj.x - player.x, proj.y - player.y);
           if (d < proj.radius + 14 && player.iFrameTimer <= 0) {
-            player.hp -= proj.damage;
-            player.iFrameTimer = 0.45;
-            proj.pierce = 0;
-            triggerHaptic("medium");
-            playSound("pet", tamagotchi.soundEnabled);
-            addFloatingText(`-${proj.damage}`, player.x, player.y - 14, "#ff2244");
+            if (tamagotchi.headAccessory === "HALO" && haloShieldReadyRef.current) {
+              haloShieldReadyRef.current = false;
+              haloRechargeTimerRef.current = 15;
+              player.iFrameTimer = 0.5;
+              proj.pierce = 0;
+              addFloatingText("✦ ЩИТ ✦", player.x, player.y - 14, "#fbbf24");
+              playSound("hatch", tamagotchi.soundEnabled);
+            } else {
+              const baseDmg = proj.damage;
+              const actualDmg =
+                tamagotchi.bodyAccessory === "FORCE_FIELD"
+                  ? Math.max(1, Math.round(baseDmg * 0.8))
+                  : baseDmg;
+              player.hp -= actualDmg;
+              player.iFrameTimer = 0.45;
+              proj.pierce = 0;
+              triggerHaptic("medium");
+              playSound("pet", tamagotchi.soundEnabled);
+              addFloatingText(`-${actualDmg}`, player.x, player.y - 14, "#ff2244");
+            }
           }
         } else {
           // Player projectile hitting enemies
@@ -1066,13 +1244,31 @@ export function TamagotchiSurvivors({
 
         // Contact Attack Player (protected by i-frames!)
         if (dist < en.radius + 16 && player.iFrameTimer <= 0) {
-          const dmgFactor = activeBuff === "QUANTUM_RISK" ? 1.4 : 1.0;
-          const hitDamage = Math.round(en.damage * dmgFactor);
-          player.hp -= hitDamage;
-          player.iFrameTimer = 0.45; // 0.45s invulnerability frames
-          triggerHaptic("medium");
-          playSound("pet", tamagotchi.soundEnabled);
-          addFloatingText(`-${hitDamage}`, player.x, player.y - 14, "#ff2244");
+          if (tamagotchi.headAccessory === "HALO" && haloShieldReadyRef.current) {
+            haloShieldReadyRef.current = false;
+            haloRechargeTimerRef.current = 15;
+            player.iFrameTimer = 0.5;
+            addFloatingText("✦ ЩИТ ✦", player.x, player.y - 14, "#fbbf24");
+            playSound("hatch", tamagotchi.soundEnabled);
+          } else {
+            const dmgFactor = activeBuff === "QUANTUM_RISK" ? 1.4 : 1.0;
+            const hitDamage = Math.round(en.damage * dmgFactor);
+            const actualDmg =
+              tamagotchi.bodyAccessory === "FORCE_FIELD"
+                ? Math.max(1, Math.round(hitDamage * 0.8))
+                : hitDamage;
+            player.hp -= actualDmg;
+            player.iFrameTimer = 0.45; // 0.45s invulnerability frames
+            triggerHaptic("medium");
+            playSound("pet", tamagotchi.soundEnabled);
+            addFloatingText(`-${actualDmg}`, player.x, player.y - 14, "#ff2244");
+
+            // Kinetic Thorns for FORCE_FIELD
+            if (tamagotchi.bodyAccessory === "FORCE_FIELD") {
+              en.hp -= 18;
+              addFloatingText("-18", en.x, en.y - 10, "#06b6d4");
+            }
+          }
 
           // Blademail reflection
           if (activeBuff === "BLADEMAIL") {
@@ -1473,6 +1669,7 @@ export function TamagotchiSurvivors({
         const accessories = getAccessoryOverlay(
           tamagotchi.headAccessory ?? "NONE",
           tamagotchi.droneAccessory ?? "NONE",
+          tamagotchi.bodyAccessory ?? "NONE",
         );
 
         const isComplexStage =
@@ -1508,22 +1705,61 @@ export function TamagotchiSurvivors({
           ctx.fillText(line, player.x, petStartY + idx * petLineHeight);
         });
 
-        // Head Accessory
+        // Head Accessory (Pure ASCII glyph directly on head, NO WORDS!)
         if (accessories.headGlyph) {
-          ctx.fillStyle = "#00f0ff";
-          ctx.font = "bold 9px monospace";
-          ctx.fillText(accessories.headGlyph, player.x, petStartY - 12);
+          const headColor =
+            tamagotchi.headAccessory === "VISOR"
+              ? "#00f0ff"
+              : tamagotchi.headAccessory === "HALO"
+                ? "#fbbf24"
+                : "#f43f5e";
+          ctx.fillStyle = headColor;
+          ctx.font = "bold 10px monospace";
+          ctx.fillText(accessories.headGlyph, player.x, petStartY - 6);
         }
 
-        // Drone Companion Accessory
+        // Body Rig Accessory (Pure ASCII bodykit, NO WORDS!)
+        if (accessories.bodyLeft && accessories.bodyRight) {
+          const bodyColor =
+            tamagotchi.bodyAccessory === "TESLA_COILS"
+              ? "#38bdf8"
+              : tamagotchi.bodyAccessory === "FORCE_FIELD"
+                ? "#06b6d4"
+                : "#ec4899";
+          ctx.fillStyle = bodyColor;
+          ctx.font = "bold 10px monospace";
+          ctx.fillText(accessories.bodyLeft, player.x - 22, player.y + walkBob);
+          ctx.fillText(accessories.bodyRight, player.x + 22, player.y + walkBob);
+          if (tamagotchi.bodyAccessory === "FORCE_FIELD") {
+            ctx.strokeStyle = "rgba(6, 182, 212, 0.35)";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y + walkBob, 26, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        // Drone Companion Accessory (Pure ASCII companion, NO WORDS!)
         if (accessories.droneGlyph) {
-          const droneAngle = runSecondsRef.current * 2.6;
+          const droneAngle = runSecondsRef.current * 2.8;
           const droneDist = 44;
           const dx = player.x + Math.cos(droneAngle) * droneDist;
           const dy = player.y + Math.sin(droneAngle) * (droneDist * 0.65);
-          ctx.fillStyle = "#ffcc00";
-          ctx.font = "bold 9px monospace";
+          const droneColor =
+            tamagotchi.droneAccessory === "BIT"
+              ? "#facc15"
+              : tamagotchi.droneAccessory === "ORB"
+                ? "#38bdf8"
+                : "#f43f5e";
+          ctx.fillStyle = droneColor;
+          ctx.font = "bold 10px monospace";
           ctx.fillText(accessories.droneGlyph, dx, dy);
+
+          // Subtle tracer tether
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+          ctx.beginPath();
+          ctx.moveTo(player.x, player.y + walkBob);
+          ctx.lineTo(dx, dy);
+          ctx.stroke();
         }
 
         // Directional Facing Spark
@@ -1635,6 +1871,7 @@ export function TamagotchiSurvivors({
     tamagotchi.soundEnabled,
     tamagotchi.morningBoostUntil,
     tamagotchi.headAccessory,
+    tamagotchi.bodyAccessory,
     tamagotchi.droneAccessory,
     tamagotchi.eggWarmCycles,
     tamagotchi.hp,

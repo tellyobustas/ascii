@@ -31,8 +31,12 @@ import {
 } from "@/lib/tamagotchi/engine";
 import { playSound, triggerHaptic } from "@/lib/tamagotchi/sound";
 import {
+  BODY_MODULES,
+  DRONE_MODULES,
   FOOD_MENU,
+  HEAD_MODULES,
   THEME_CONFIG,
+  type BodyAccessory,
   type DroneAccessory,
   type FoodItem,
   type HeadAccessory,
@@ -533,13 +537,22 @@ export function TamagotchiGenerator() {
   };
 
   // Смена аксессуара
-  const handleEquip = (head: HeadAccessory, drone: DroneAccessory) => {
+  const handleEquip = (
+    head: HeadAccessory,
+    drone: DroneAccessory,
+    body?: BodyAccessory,
+  ) => {
     playSound("click", state.soundEnabled);
-    const updated = equipAccessory(state, head, drone);
+    const updated = equipAccessory(
+      state,
+      head,
+      drone,
+      body ?? state.bodyAccessory ?? "NONE",
+    );
     setState(updated);
     saveTamagotchiState(updated);
-    setStatusMessage("Модули обновлены!");
-    flashEffect("👑 МОДУЛЬ НАДЕТ");
+    setStatusMessage("Модули и обвесы обновлены!");
+    flashEffect("👑 ОБВЕС УСТАНОВЛЕН");
   };
 
   // Аварийный ребут
@@ -631,6 +644,7 @@ export function TamagotchiGenerator() {
       {/* Главный виртуальный CRT-экран */}
       <TamagotchiScreen
         activeActionEffect={activeActionEffect}
+        bodyAccessory={state.bodyAccessory ?? "NONE"}
         droneAccessory={state.droneAccessory}
         eggWarmCycles={state.eggWarmCycles}
         hasVirus={state.hasVirus}
@@ -1316,79 +1330,195 @@ export function TamagotchiGenerator() {
 
       {/* Дровер гардероба / модулей */}
       {showWardrobe && (
-        <div className="border border-white/20 bg-black/90 p-3">
+        <div className="border border-white/20 bg-black/95 p-3">
           <div className="flex items-center justify-between pb-2 border-b border-white/10">
             <span
-              className="text-xs font-black uppercase"
+              className="text-xs font-black uppercase tracking-wider"
               style={{ color: themeColors.primary }}
             >
-              МОДУЛИ И КИБЕР-ОБВЕСЫ
+              МОДУЛИ И КИБЕР-ОБВЕСЫ (ХАРАКТЕРИСТИКИ)
+            </span>
+            <span className="text-[0.52rem] text-white/50 uppercase">
+              ОБВЕСЫ ДАЮТ БОНУСЫ В РЕЙДЕ И ТАМАГОЧИ
             </span>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 1. Головной модуль */}
             <div>
-              <p className="text-[0.55rem] text-white/50 uppercase mb-1">
-                ГОЛОВНОЙ МОДУЛЬ:
+              <p className="text-[0.58rem] text-cyan-400 font-black uppercase mb-1.5 flex items-center justify-between">
+                <span>[1] ГОЛОВНОЙ МОДУЛЬ:</span>
+                <span className="font-mono text-[0.62rem] text-white/70">
+                  {HEAD_MODULES[state.headAccessory]?.glyph ?? "[ - ]"}
+                </span>
               </p>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1.5">
                 {(["NONE", "VISOR", "HALO", "HORNS"] as HeadAccessory[]).map(
-                  (h) => (
-                    <button
-                      key={h}
-                      onClick={() => handleEquip(h, state.droneAccessory)}
-                      type="button"
-                      className="border p-1.5 text-left text-[0.58rem] font-bold uppercase transition"
-                      style={{
-                        borderColor:
-                          state.headAccessory === h
+                  (h) => {
+                    const spec = HEAD_MODULES[h];
+                    const isSelected = state.headAccessory === h;
+                    return (
+                      <button
+                        key={h}
+                        onClick={() =>
+                          handleEquip(h, state.droneAccessory, state.bodyAccessory)
+                        }
+                        type="button"
+                        className="border p-1.5 text-left transition flex flex-col gap-0.5"
+                        style={{
+                          borderColor: isSelected
                             ? themeColors.primary
-                            : "rgba(255,255,255,0.1)",
-                        color:
-                          state.headAccessory === h
-                            ? themeColors.primary
-                            : "rgba(255,255,255,0.6)",
-                      }}
-                    >
-                      {h === "NONE" && "БЕЗ МОДУЛЯ"}
-                      {h === "VISOR" && "КИБЕР-ВИЗОР [==]"}
-                      {h === "HALO" && "НЕОН-НИМБ <✦>"}
-                      {h === "HORNS" && "РОГА РАЗГОНА //\\\\"}
-                    </button>
-                  ),
+                            : "rgba(255,255,255,0.12)",
+                          backgroundColor: isSelected
+                            ? "rgba(255,255,255,0.08)"
+                            : "rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="font-mono text-xs font-black"
+                            style={{
+                              color: isSelected
+                                ? themeColors.primary
+                                : "rgba(255,255,255,0.6)",
+                            }}
+                          >
+                            {spec.glyph}
+                          </span>
+                          <span className="text-[0.55rem] font-black uppercase text-white/90">
+                            {spec.name}
+                          </span>
+                        </div>
+                        <div className="text-[0.50rem] text-cyan-300 font-semibold leading-tight">
+                          ⚔️ {spec.combatPerk}
+                        </div>
+                        <div className="text-[0.48rem] text-white/50 leading-tight">
+                          👾 {spec.petPerk}
+                        </div>
+                      </button>
+                    );
+                  },
                 )}
               </div>
             </div>
 
+            {/* 2. Кибер-обвес корпуса */}
             <div>
-              <p className="text-[0.55rem] text-white/50 uppercase mb-1">
-                СПУТНИК-ДРОН:
+              <p className="text-[0.58rem] text-pink-400 font-black uppercase mb-1.5 flex items-center justify-between">
+                <span>[2] КИБЕР-ОБВЕС КОРПУСА:</span>
+                <span className="font-mono text-[0.62rem] text-white/70">
+                  {BODY_MODULES[state.bodyAccessory ?? "NONE"]?.glyph ?? "[ - ]"}
+                </span>
               </p>
-              <div className="flex flex-col gap-1">
-                {(["NONE", "BIT", "ORB", "MINI_DEMON"] as DroneAccessory[]).map(
-                  (d) => (
+              <div className="flex flex-col gap-1.5">
+                {(
+                  [
+                    "NONE",
+                    "EXO_SPINE",
+                    "FORCE_FIELD",
+                    "TESLA_COILS",
+                  ] as BodyAccessory[]
+                ).map((b) => {
+                  const spec = BODY_MODULES[b];
+                  const isSelected = (state.bodyAccessory ?? "NONE") === b;
+                  return (
                     <button
-                      key={d}
-                      onClick={() => handleEquip(state.headAccessory, d)}
+                      key={b}
+                      onClick={() =>
+                        handleEquip(state.headAccessory, state.droneAccessory, b)
+                      }
                       type="button"
-                      className="border p-1.5 text-left text-[0.58rem] font-bold uppercase transition"
+                      className="border p-1.5 text-left transition flex flex-col gap-0.5"
                       style={{
-                        borderColor:
-                          state.droneAccessory === d
-                            ? themeColors.primary
-                            : "rgba(255,255,255,0.1)",
-                        color:
-                          state.droneAccessory === d
-                            ? themeColors.primary
-                            : "rgba(255,255,255,0.6)",
+                        borderColor: isSelected
+                          ? themeColors.primary
+                          : "rgba(255,255,255,0.12)",
+                        backgroundColor: isSelected
+                          ? "rgba(255,255,255,0.08)"
+                          : "rgba(0,0,0,0.5)",
                       }}
                     >
-                      {d === "NONE" && "БЕЗ ДРОНА"}
-                      {d === "BIT" && "БИТ-СПУТНИК [01]"}
-                      {d === "ORB" && "ОРБИТАЛЬНЫЙ ШАР (*)"}
-                      {d === "MINI_DEMON" && "МИНИ-ДЕМОН <^>"}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="font-mono text-xs font-black"
+                          style={{
+                            color: isSelected
+                              ? themeColors.primary
+                              : "rgba(255,255,255,0.6)",
+                          }}
+                        >
+                          {spec.glyph}
+                        </span>
+                        <span className="text-[0.55rem] font-black uppercase text-white/90">
+                          {spec.name}
+                        </span>
+                      </div>
+                      <div className="text-[0.50rem] text-pink-300 font-semibold leading-tight">
+                        ⚔️ {spec.combatPerk}
+                      </div>
+                      <div className="text-[0.48rem] text-white/50 leading-tight">
+                        👾 {spec.petPerk}
+                      </div>
                     </button>
-                  ),
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Спутник-дрон */}
+            <div>
+              <p className="text-[0.58rem] text-amber-400 font-black uppercase mb-1.5 flex items-center justify-between">
+                <span>[3] СПУТНИК-ДРОН:</span>
+                <span className="font-mono text-[0.62rem] text-white/70">
+                  {DRONE_MODULES[state.droneAccessory]?.glyph ?? "[ - ]"}
+                </span>
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {(["NONE", "BIT", "ORB", "MINI_DEMON"] as DroneAccessory[]).map(
+                  (d) => {
+                    const spec = DRONE_MODULES[d];
+                    const isSelected = state.droneAccessory === d;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() =>
+                          handleEquip(state.headAccessory, d, state.bodyAccessory)
+                        }
+                        type="button"
+                        className="border p-1.5 text-left transition flex flex-col gap-0.5"
+                        style={{
+                          borderColor: isSelected
+                            ? themeColors.primary
+                            : "rgba(255,255,255,0.12)",
+                          backgroundColor: isSelected
+                            ? "rgba(255,255,255,0.08)"
+                            : "rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="font-mono text-xs font-black"
+                            style={{
+                              color: isSelected
+                                ? themeColors.primary
+                                : "rgba(255,255,255,0.6)",
+                            }}
+                          >
+                            {spec.glyph}
+                          </span>
+                          <span className="text-[0.55rem] font-black uppercase text-white/90">
+                            {spec.name}
+                          </span>
+                        </div>
+                        <div className="text-[0.50rem] text-amber-300 font-semibold leading-tight">
+                          ⚔️ {spec.combatPerk}
+                        </div>
+                        <div className="text-[0.48rem] text-white/50 leading-tight">
+                          👾 {spec.petPerk}
+                        </div>
+                      </button>
+                    );
+                  },
                 )}
               </div>
             </div>

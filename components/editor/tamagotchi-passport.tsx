@@ -28,6 +28,8 @@ export function TamagotchiPassport({
   const sprite = getPetSprite(state.stage, "HAPPY", state.eggWarmCycles);
   const stageRu = STAGE_NAMES_RU[state.stage] ?? state.stage;
 
+  const modStr = `${state.headAccessory !== "NONE" ? state.headAccessory : "-"} | ${state.bodyAccessory && state.bodyAccessory !== "NONE" ? state.bodyAccessory : "-"} | ${state.droneAccessory !== "NONE" ? state.droneAccessory : "-"}`;
+
   const passportText = [
     "╔═══════════════════════════════════════════╗",
     "║        КИБЕР-ПАСПОРТ ASCIILOGRAPH         ║",
@@ -40,6 +42,7 @@ export function TamagotchiPassport({
     `║  БАЛАНС:      ${(state.bytes + " БАЙТОВ").padEnd(27, " ")} ║`,
     `║  СИНХРОН:     ${(state.happiness + "%").padEnd(27, " ")} ║`,
     `║  ПРОКАЧКА:    CPU +${state.attributes?.cpu ?? 0} | RAM +${state.attributes?.ram ?? 0} | FW +${state.attributes?.firewall ?? 0}   ║`,
+    `║  ОБВЕСЫ:      ${modStr.padEnd(27, " ")} ║`,
     "╠═══════════════════════════════════════════╣",
     "║             ОБЛИК ПИТОМЦА                 ║",
     ...sprite.map((line) => `║ ${line.padEnd(41, " ")} ║`),

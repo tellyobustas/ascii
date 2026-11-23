@@ -1,4 +1,5 @@
 import type {
+  BodyAccessory,
   DroneAccessory,
   HeadAccessory,
   PetMood,
@@ -598,19 +599,40 @@ export function getPetSprite(
   }
 }
 
+export interface AccessoryOverlay {
+  headGlyph: string | null;
+  droneGlyph: string | null;
+  bodyLeft: string | null;
+  bodyRight: string | null;
+}
+
 export function getAccessoryOverlay(
   head: HeadAccessory,
   drone: DroneAccessory,
-): { headGlyph: string | null; droneGlyph: string | null } {
+  body?: BodyAccessory,
+): AccessoryOverlay {
   let headGlyph: string | null = null;
-  if (head === "VISOR") headGlyph = "[ ВИЗОР == ]";
-  if (head === "HALO") headGlyph = "<✦ НЕОН-НИМБ ✦>";
-  if (head === "HORNS") headGlyph = "//\\\\ РОГА РАЗГОНА //\\\\";
+  if (head === "VISOR") headGlyph = "[ ═══ ]";
+  if (head === "HALO") headGlyph = ".-~✦~-.";
+  if (head === "HORNS") headGlyph = "//     \\\\";
 
   let droneGlyph: string | null = null;
-  if (drone === "BIT") droneGlyph = "• СПУТНИК: [01]";
-  if (drone === "ORB") droneGlyph = "✦ ОРБИТА: (*)";
-  if (drone === "MINI_DEMON") droneGlyph = "👾 МИНИ-ДЕМОН: <^>";
+  if (drone === "BIT") droneGlyph = "[01]";
+  if (drone === "ORB") droneGlyph = "( ✦ )";
+  if (drone === "MINI_DEMON") droneGlyph = "/\\^o^/\\";
 
-  return { headGlyph, droneGlyph };
+  let bodyLeft: string | null = null;
+  let bodyRight: string | null = null;
+  if (body === "EXO_SPINE") {
+    bodyLeft = ">══";
+    bodyRight = "══<";
+  } else if (body === "FORCE_FIELD") {
+    bodyLeft = "{";
+    bodyRight = "}";
+  } else if (body === "TESLA_COILS") {
+    bodyLeft = "╒⚡";
+    bodyRight = "⚡╕";
+  }
+
+  return { headGlyph, droneGlyph, bodyLeft, bodyRight };
 }

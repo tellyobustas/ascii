@@ -14,6 +14,7 @@ import {
 import {
   FOOD_MENU,
   STAGE_NAMES_RU,
+  type BodyAccessory,
   type DroneAccessory,
   type HeadAccessory,
   type PetMood,
@@ -67,6 +68,7 @@ export const DEFAULT_TAMAGOTCHI_STATE: TamagotchiState = {
   hasVirus: false,
   eggWarmCycles: 0,
   headAccessory: "NONE",
+  bodyAccessory: "NONE",
   droneAccessory: "NONE",
   dailyQuests: INITIAL_QUESTS,
   lastWheelSpin: 0,
@@ -136,7 +138,9 @@ export function checkEvolution(state: TamagotchiState): {
 }
 
 export function addExp(state: TamagotchiState, amount: number): TamagotchiState {
-  let exp = state.exp + amount;
+  const visorBonus = state.headAccessory === "VISOR" ? 1.15 : 1.0;
+  const actualAmount = Math.max(1, Math.round(amount * visorBonus));
+  let exp = state.exp + actualAmount;
   let level = state.level;
   let expToNextLevel = state.expToNextLevel;
   let bytes = state.bytes;
@@ -232,28 +236,47 @@ export function applyTimeDecay(
 
   const currentHour = new Date().getHours();
   const isNight = currentHour >= 23 || currentHour < 7;
+  const hasForceField = currentState.bodyAccessory === "FORCE_FIELD";
+  const hasHorns = currentState.headAccessory === "HORNS";
+  const hasHalo = currentState.headAccessory === "HALO";
+  const hasOrb = currentState.droneAccessory === "ORB";
+  const hasTesla = currentState.bodyAccessory === "TESLA_COILS";
+
+  let bytes = currentState.bytes ?? 0;
+  if (hasTesla) {
+    bytes += Math.floor(hours * 120); // +2 Байта в минуту пассивно
+  }
 
   if (currentState.isSleeping) {
-    // Ночной сон: ускоренное восстановление заряда (+24/ч), но дефрагментация дает легкий налет в кэше
-    const chargeSpeed = isNight ? 24 : 18;
+    // Ночной сон: ускоренное восстановление заряда (+24/ч), рога дают оверклок x1.8
+    const baseSpeed = isNight ? 24 : 18;
+    const chargeSpeed = hasHorns ? baseSpeed * 1.8 : baseSpeed;
     energy = Math.min(maxEnergy, energy + hours * chargeSpeed);
-    happiness = Math.max(0, happiness - hours * (isNight ? 1.0 : 1.5));
+    const nightDecayMult = hasForceField ? 0.5 : 1.0;
+    happiness = Math.max(0, happiness - hours * (isNight ? 1.0 : 1.5) * nightDecayMult);
     // Откат чистоты от ночной дефрагментации (требует утренней очистки)
-    cleanliness = Math.max(0, cleanliness - hours * (isNight ? 2.5 : 1.5) * bugResistFactor);
+    cleanliness = Math.max(0, cleanliness - hours * (isNight ? 2.5 : 1.5) * bugResistFactor * nightDecayMult);
   } else {
-    // Ночное бодрствование: ночной перегрев (+40% истощения)
-    const nightFatigue = isNight ? 1.4 : 1.0;
+    // Ночное бодрствование: ночной перегрев (+40% истощения), силовой каркас защищает
+    const nightFatigue = (isNight ? 1.4 : 1.0) * (hasForceField ? 0.6 : 1.0);
     energy = Math.max(0, energy - hours * 6 * nightFatigue);
     happiness = Math.max(0, happiness - hours * 5 * nightFatigue);
     cleanliness = Math.max(0, cleanliness - hours * 4 * bugResistFactor * nightFatigue);
   }
 
-  if (cleanliness < 50 && poopCount < 1) poopCount = 1;
-  if (cleanliness < 30 && poopCount < 2) poopCount = 2;
-  if (cleanliness < 15 && poopCount < 3) poopCount = 3;
+  // Орбитальный шар сжигает мусор и снижает баги
+  const bugThresholdMult = hasOrb ? 0.5 : 1.0;
+  if (cleanliness < 50 * bugThresholdMult && poopCount < 1) poopCount = 1;
+  if (cleanliness < 30 * bugThresholdMult && poopCount < 2) poopCount = 2;
+  if (cleanliness < 15 * bugThresholdMult && poopCount < 3) poopCount = 3;
   if (cleanliness <= 5 && poopCount < 4) {
     poopCount = 4;
     if (Math.random() > fw * 0.15) hasVirus = true;
+  }
+
+  // Неон-нимб дает полный иммунитет к вирусам
+  if (hasHalo) {
+    hasVirus = false;
   }
 
   if (energy <= 0) {
@@ -269,6 +292,7 @@ export function applyTimeDecay(
     happiness: Math.round(happiness),
     cleanliness: Math.round(cleanliness),
     hp: Math.round(hp),
+    bytes,
     poopCount,
     hasVirus,
     lastTick: Date.now(),
@@ -390,7 +414,8 @@ export function petAnimal(state: TamagotchiState): {
     return { state, success: false, message: "Система отключена! Нужен ребут." };
   }
 
-  if (state.energy < 2) {
+  const energyCost = state.bodyAccessory === "EXO_SPINE" ? 0 : 1;
+  if (energyCost > 0 && state.energy < energyCost) {
     return {
       state,
       success: false,
@@ -403,10 +428,15 @@ export function petAnimal(state: TamagotchiState): {
   const expGain = timeSinceLastPet > 4 ? 6 : 1;
   const happyGain = timeSinceLastPet > 4 ? 8 : 2;
 
+  const bitBonus = state.droneAccessory === "BIT" ? 1 : 0;
+  const visorCache = state.headAccessory === "VISOR" && Math.random() < 0.25 ? 3 : 0;
+  const earnedBytes = bitBonus + visorCache;
+
   let nextState: TamagotchiState = {
     ...state,
-    energy: Math.max(0, state.energy - 1),
+    energy: Math.max(0, state.energy - energyCost),
     happiness: Math.min(100, state.happiness + happyGain),
+    bytes: state.bytes + earnedBytes,
     totalPetted: state.totalPetted + 1,
     lastPetted: now,
     lastTick: now,
@@ -414,10 +444,11 @@ export function petAnimal(state: TamagotchiState): {
 
   nextState = addExp(nextState, expGain);
 
+  const bonusMsg = earnedBytes > 0 ? ` (+${earnedBytes} Байт от модулей!)` : "";
   return {
     state: nextState,
     success: true,
-    message: `Поглажен ${state.name}! Синхронизация +${happyGain}%, Опыт +${expGain}`,
+    message: `Поглажен ${state.name}! Синхрон +${happyGain}%, Опыт +${expGain}${bonusMsg}`,
   };
 }
 
@@ -430,11 +461,12 @@ export function cleanPet(state: TamagotchiState): {
     return { state, success: false, message: "Оболочка ядра стерильна." };
   }
 
-  if (state.energy < 4) {
+  const energyCost = state.bodyAccessory === "EXO_SPINE" ? 2 : 4;
+  if (state.energy < energyCost) {
     return {
       state,
       success: false,
-      message: "Недостаточно энергии для очистки (-4% Энергии).",
+      message: `Недостаточно энергии для очистки (-${energyCost}% Энергии).`,
     };
   }
 
@@ -443,7 +475,7 @@ export function cleanPet(state: TamagotchiState): {
 
   let nextState: TamagotchiState = {
     ...state,
-    energy: Math.max(0, state.energy - 4),
+    energy: Math.max(0, state.energy - energyCost),
     cleanliness: 100,
     poopCount: 0,
     bytes: state.bytes + rewardBytes,
@@ -613,11 +645,13 @@ export function equipAccessory(
   state: TamagotchiState,
   head: HeadAccessory,
   drone: DroneAccessory,
+  body?: BodyAccessory,
 ): TamagotchiState {
   return {
     ...state,
     headAccessory: head,
     droneAccessory: drone,
+    bodyAccessory: body ?? state.bodyAccessory ?? "NONE",
   };
 }
 
@@ -741,6 +775,9 @@ export function loadTamagotchiState(): TamagotchiState {
       },
       dailyQuests,
       dailyStreak,
+      headAccessory: parsed.headAccessory ?? "NONE",
+      bodyAccessory: parsed.bodyAccessory ?? "NONE",
+      droneAccessory: parsed.droneAccessory ?? "NONE",
       lastLoginDate: parsed.lastLoginDate ?? "",
       claimedDailyRewardToday,
       lastQuestDate,

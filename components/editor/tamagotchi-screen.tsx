@@ -10,6 +10,7 @@ import {
   MOOD_NAMES_RU,
   STAGE_NAMES_RU,
   THEME_CONFIG,
+  type BodyAccessory,
   type DroneAccessory,
   type HeadAccessory,
   type PetMood,
@@ -30,6 +31,7 @@ interface TamagotchiScreenProps {
   hasVirus: boolean;
   eggWarmCycles: number;
   headAccessory: HeadAccessory;
+  bodyAccessory?: BodyAccessory;
   droneAccessory: DroneAccessory;
   morningBoostUntil?: number;
   onScreenClick: () => void;
@@ -47,6 +49,7 @@ export function TamagotchiScreen({
   hasVirus,
   eggWarmCycles,
   headAccessory,
+  bodyAccessory,
   droneAccessory,
   morningBoostUntil,
   onScreenClick,
@@ -84,9 +87,10 @@ export function TamagotchiScreen({
   }, [isSleeping]);
 
   const spriteLines = getPetSprite(stage, mood, eggWarmCycles);
-  const { headGlyph, droneGlyph } = getAccessoryOverlay(
+  const { headGlyph, droneGlyph, bodyLeft, bodyRight } = getAccessoryOverlay(
     headAccessory,
     droneAccessory,
+    bodyAccessory,
   );
 
   const isAdultOrHigher =
@@ -162,89 +166,137 @@ export function TamagotchiScreen({
           </div>
         )}
 
-        {/* Оверлей головного аксессуара */}
-        {headGlyph && (
-          <div
-            className="mb-1 font-mono text-[0.62rem] font-black tracking-wider animate-pulse"
-            style={{ color: themeColors.primary }}
-          >
-            {headGlyph}
-          </div>
-        )}
-
-        {/* Взрослая форма: фирменный ASCII-логотип Asciilograph */}
-        {isAdultOrHigher ? (
-          <div
-            className="flex flex-col items-center justify-center transition-transform duration-300"
-            style={{
-              transform: isSleeping
-                ? "scale(0.92) opacity(0.65)"
-                : bounce === 1
-                  ? "translateY(-3px)"
-                  : "translateY(0px)",
-              filter: hasVirus
-                ? "hue-rotate(280deg) saturate(1.8)"
-                : isSleeping
-                  ? "brightness(0.6)"
-                  : undefined,
-            }}
-          >
-            <div className="w-full max-w-[270px]">
-              <AsciilographMark />
-            </div>
-
+        {/* Центральный блок персонажа с интегрированными модулями и обвесами (БЕЗ НАДПИСЕЙ) */}
+        <div className="relative inline-flex items-center justify-center">
+          {/* Левый кибер-обвес / крыло */}
+          {bodyLeft && stage !== "EGG" && (
             <div
-              className="mt-1 text-center font-mono text-[0.58rem] font-black tracking-widest"
-              style={{ color: themeColors.primary }}
-            >
-              {stage === "OMEGA_DEITY" && "⚡ СВЕРХРАЗГОН: ОМЕГА-ДЕМОН ⚡"}
-              {stage === "NEO_OVERLORD" && "✦ КИБЕР-ПОВЕЛИТЕЛЬ СЕТИ ✦"}
-              {stage === "CYBER_ARMOR" && "[ БРОНИРОВАННЫЙ КОРПУС Mk.II ]"}
-              {stage === "DAEMON_CORE" && "<[ ASCIILOGRAPH CORE DAEMON ]>"}
-            </div>
-          </div>
-        ) : (
-          /* Младшие формы: детальный ASCII-спрайт */
-          <div
-            className="flex flex-col items-center justify-center transition-transform duration-300"
-            style={{
-              transform: isSleeping
-                ? "scale(0.94)"
-                : bounce === 1
-                  ? "translateY(-3px)"
-                  : "translateY(0px)",
-              opacity: isSleeping ? 0.6 : 1,
-            }}
-          >
-            <pre
-              className="font-mono text-xs sm:text-sm font-bold leading-tight select-none text-center"
+              className="absolute -left-6 sm:-left-8 top-1/2 -translate-y-1/2 font-mono text-xs sm:text-sm font-black tracking-tight select-none pointer-events-none transition-all duration-300"
               style={{
-                color: themeColors.primary,
-                textShadow: `0 0 10px ${themeColors.glow}`,
+                color:
+                  bodyAccessory === "TESLA_COILS"
+                    ? "#38bdf8"
+                    : bodyAccessory === "FORCE_FIELD"
+                      ? "#06b6d4"
+                      : "#ec4899",
+                textShadow: "0 0 6px currentColor",
               }}
             >
-              {spriteLines.join("\n")}
-            </pre>
+              {bodyLeft}
+            </div>
+          )}
 
-            {stage === "EGG" && (
-              <p
-                className="mt-2 text-[0.60rem] uppercase tracking-wider animate-pulse text-center"
-                style={{ color: themeColors.primary }}
+          {/* Головной модуль: сидит прямо на макушке питомца БЕЗ НАДПИСЕЙ */}
+          {headGlyph && stage !== "EGG" && (
+            <div
+              className="absolute -top-3.5 sm:-top-4 left-1/2 -translate-x-1/2 font-mono text-[0.68rem] sm:text-xs font-black tracking-widest select-none pointer-events-none whitespace-nowrap z-20"
+              style={{
+                color:
+                  headAccessory === "VISOR"
+                    ? "#00f0ff"
+                    : headAccessory === "HALO"
+                      ? "#fbbf24"
+                      : "#f43f5e",
+                textShadow: "0 0 8px currentColor",
+              }}
+            >
+              {headGlyph}
+            </div>
+          )}
+
+          {/* Взрослая форма: фирменный ASCII-логотип Asciilograph (без лишних текстовых плашек) */}
+          {isAdultOrHigher ? (
+            <div
+              className="flex flex-col items-center justify-center transition-transform duration-300"
+              style={{
+                transform: isSleeping
+                  ? "scale(0.92) opacity(0.65)"
+                  : bounce === 1
+                    ? "translateY(-3px)"
+                    : "translateY(0px)",
+                filter: hasVirus
+                  ? "hue-rotate(280deg) saturate(1.8)"
+                  : isSleeping
+                    ? "brightness(0.6)"
+                    : undefined,
+              }}
+            >
+              <div className="w-full max-w-[270px]">
+                <AsciilographMark />
+              </div>
+            </div>
+          ) : (
+            /* Младшие формы: детальный ASCII-спрайт */
+            <div
+              className="flex flex-col items-center justify-center transition-transform duration-300"
+              style={{
+                transform: isSleeping
+                  ? "scale(0.94)"
+                  : bounce === 1
+                    ? "translateY(-3px)"
+                    : "translateY(0px)",
+                opacity: isSleeping ? 0.6 : 1,
+              }}
+            >
+              <pre
+                className="font-mono text-xs sm:text-sm font-bold leading-tight select-none text-center"
+                style={{
+                  color: themeColors.primary,
+                  textShadow: `0 0 10px ${themeColors.glow}`,
+                }}
               >
-                Тапай по экрану для прогрева ядра ({eggWarmCycles}/5)
-              </p>
-            )}
-          </div>
-        )}
+                {spriteLines.join("\n")}
+              </pre>
 
-        {/* Оверлей дрона-спутника */}
-        {droneGlyph && (
-          <div
-            className="mt-1 font-mono text-[0.55rem] font-bold text-cyan-300 opacity-90 animate-pulse"
-          >
-            {droneGlyph}
-          </div>
-        )}
+              {stage === "EGG" && (
+                <p
+                  className="mt-2 text-[0.60rem] uppercase tracking-wider animate-pulse text-center"
+                  style={{ color: themeColors.primary }}
+                >
+                  Тапай по экрану для прогрева ядра ({eggWarmCycles}/5)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Правый кибер-обвес / крыло */}
+          {bodyRight && stage !== "EGG" && (
+            <div
+              className="absolute -right-6 sm:-right-8 top-1/2 -translate-y-1/2 font-mono text-xs sm:text-sm font-black tracking-tight select-none pointer-events-none transition-all duration-300"
+              style={{
+                color:
+                  bodyAccessory === "TESLA_COILS"
+                    ? "#38bdf8"
+                    : bodyAccessory === "FORCE_FIELD"
+                      ? "#06b6d4"
+                      : "#ec4899",
+                textShadow: "0 0 6px currentColor",
+              }}
+            >
+              {bodyRight}
+            </div>
+          )}
+
+          {/* Спутник-дрон: динамически парит справа-сверху от персонажа (БЕЗ НАДПИСЕЙ) */}
+          {droneGlyph && stage !== "EGG" && (
+            <div
+              className="absolute -top-3 -right-8 sm:-right-10 font-mono text-[0.65rem] sm:text-xs font-black select-none pointer-events-none animate-bounce"
+              style={{
+                color:
+                  droneAccessory === "BIT"
+                    ? "#facc15"
+                    : droneAccessory === "ORB"
+                      ? "#38bdf8"
+                      : "#f43f5e",
+                textShadow: "0 0 8px currentColor",
+                animationDuration: "2.4s",
+              }}
+            >
+              <span className="opacity-40 text-[0.5rem] mr-0.5">··</span>
+              {droneGlyph}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Баги мусора на экране */}
