@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  EVOLUTION_MAP,
   WEAPON_REGISTRY,
   type ActiveWeapon,
   type DropEntity,
@@ -53,6 +54,18 @@ const STAGE_SPEED_BONUS: Record<string, number> = {
   CYBER_ARMOR: 22,
   NEO_OVERLORD: 35,
   OMEGA_DEITY: 50,
+};
+
+const STAGE_DAMAGE_MULT: Record<string, number> = {
+  EGG: 0.85,
+  NIBBLE: 1.0,
+  SPARK: 1.15,
+  IMP: 1.35,
+  PROTO_DAEMON: 1.6,
+  DAEMON_CORE: 2.0,
+  CYBER_ARMOR: 2.5,
+  NEO_OVERLORD: 3.1,
+  OMEGA_DEITY: 3.8,
 };
 
 // 2-frame retro cyberpunk ASCII sprites for all enemies
@@ -126,11 +139,31 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
   const cards: UpgradeCard[] = [];
   const ownedWeaponIds = currentWeapons.map((w) => w.id);
   const allWeaponIds = Object.keys(WEAPON_REGISTRY);
+  const evoWeaponIds = Object.values(EVOLUTION_MAP);
 
-  // Upgrade existing weapon
+  // 1. Weapon Evolution Cards (Thrilling Legendary Upgrades when Lv >= 4)
   currentWeapons.forEach((w) => {
+    const evoId = EVOLUTION_MAP[w.id];
+    if (evoId && w.level >= 4 && !ownedWeaponIds.includes(evoId)) {
+      const evoDef = WEAPON_REGISTRY[evoId];
+      if (evoDef) {
+        cards.push({
+          id: `evo_${evoId}`,
+          title: `✨ ЭВОЛЮЦИЯ: ${evoDef.nameRu}`,
+          desc: evoDef.description,
+          glyph: evoDef.glyph,
+          type: "EVOLUTION",
+          weaponId: evoId,
+        });
+      }
+    }
+  });
+
+  // 2. Upgrade existing non-evolved weapons
+  currentWeapons.forEach((w) => {
+    const isEvo = evoWeaponIds.includes(w.id);
     const def = WEAPON_REGISTRY[w.id];
-    if (def && w.level < 5) {
+    if (def && !isEvo && w.level < 5) {
       cards.push({
         id: `upgrade_${w.id}_${w.level + 1}`,
         title: `${def.nameRu} [УР. ${w.level + 1}]`,
@@ -142,10 +175,10 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
     }
   });
 
-  // Acquire new weapon (up to 6 weapons)
+  // 3. Acquire new base weapon (up to 6 weapons; evolved weapons can only be evolved into!)
   if (ownedWeaponIds.length < 6) {
     allWeaponIds.forEach((id) => {
-      if (!ownedWeaponIds.includes(id)) {
+      if (!ownedWeaponIds.includes(id) && !evoWeaponIds.includes(id)) {
         const def = WEAPON_REGISTRY[id];
         if (def) {
           cards.push({
@@ -161,12 +194,12 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
     });
   }
 
-  // Passive upgrades
+  // 4. Passive upgrades
   cards.push(
     {
       id: "passive_damage",
       title: "АТАКА",
-      desc: "+20% к урону оружия",
+      desc: "+20% к урону всего оружия",
       glyph: "⚔️",
       type: "PASSIVE",
       passiveStat: "DAMAGE",
@@ -189,8 +222,17 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
     },
   );
 
-  const shuffled = [...cards].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 3);
+  const evoCards = cards.filter((c) => c.type === "EVOLUTION");
+  const otherCards = cards.filter((c) => c.type !== "EVOLUTION");
+  const shuffledOther = [...otherCards].sort(() => Math.random() - 0.5);
+
+  // If weapon evolution is unlocked, guarantee it appears in the cards!
+  if (evoCards.length > 0) {
+    const chosenEvo = evoCards[Math.floor(Math.random() * evoCards.length)];
+    return [chosenEvo, ...shuffledOther.slice(0, 2)];
+  }
+
+  return shuffledOther.slice(0, 3);
 }
 
 export function TamagotchiSurvivors({
@@ -232,9 +274,35 @@ export function TamagotchiSurvivors({
   const medkitMultiplier = 1 + (skillTree.HEAL_AMP ?? 0) * 0.2;
   const medkitHealAmount = Math.floor(medkitHealBase * medkitMultiplier);
 
+  const stageDmgMult = STAGE_DAMAGE_MULT[tamagotchi.stage] ?? 1.0;
+  const levelDmgBonus = 1 + (tamagotchi.level - 1) * 0.04;
   const globalDamageMult =
+    stageDmgMult *
+    levelDmgBonus *
     (1 + (skillTree.ATK_POWER ?? 0) * 0.12) *
     (1 + (tamagotchi.attributes?.cpu ?? 0) * 0.05);
+
+  // Sector Danger Tier: Adaptive Difficulty Scaling for Veterans & High-Level Tamagotchis
+  const STAGE_ORDER = [
+    "EGG",
+    "NIBBLE",
+    "SPARK",
+    "IMP",
+    "PROTO_DAEMON",
+    "DAEMON_CORE",
+    "CYBER_ARMOR",
+    "NEO_OVERLORD",
+    "OMEGA_DEITY",
+  ];
+  const stageIndex = STAGE_ORDER.indexOf(tamagotchi.stage);
+  const skillPointsTotal = Object.values(skillTree).reduce(
+    (sum, v) => sum + (v ?? 0),
+    0,
+  );
+  const playerPowerScore =
+    tamagotchi.level * 2 + Math.max(0, stageIndex) * 6 + skillPointsTotal * 3;
+  const dangerTier = Math.min(10, Math.max(1, 1 + Math.floor(playerPowerScore / 22)));
+  const dangerMult = 1 + (dangerTier - 1) * 0.28;
 
   const hornCooldownMult = tamagotchi.headAccessory === "HORNS" ? 0.75 : 1.0;
   const globalCooldownMult =
@@ -300,6 +368,7 @@ export function TamagotchiSurvivors({
   const hudExtractionRef = useRef<HTMLDivElement | null>(null);
   const hudExtractionDistRef = useRef<HTMLSpanElement | null>(null);
   const hudExtractionArrowRef = useRef<HTMLSpanElement | null>(null);
+  const hudComboRef = useRef<HTMLSpanElement | null>(null);
 
   // Throttling references
   const lastReportedSecondRef = useRef(-1);
@@ -349,6 +418,11 @@ export function TamagotchiSurvivors({
   const blademailTimerRef = useRef(0);
   const teslaTimerRef = useRef(1.5);
   const satelliteShootTimerRef = useRef(2.2);
+
+  // Dopamine & Addictiveness Engine Refs
+  const comboCountRef = useRef(0);
+  const comboTimerRef = useRef(0);
+  const waveMilestonesRef = useRef<Set<string>>(new Set());
 
   // Cyber Modules Realtime State Refs
   const haloShieldReadyRef = useRef(tamagotchi.headAccessory === "HALO");
@@ -552,7 +626,33 @@ export function TamagotchiSurvivors({
     playSound("levelUp", tamagotchi.soundEnabled);
     triggerHaptic("success");
 
-    if (card.type === "NEW_WEAPON" && card.weaponId) {
+    if (card.type === "EVOLUTION" && card.weaponId) {
+      const evoId = card.weaponId;
+      const baseId = Object.keys(EVOLUTION_MAP).find(
+        (base) => EVOLUTION_MAP[base] === evoId,
+      );
+      if (baseId) {
+        weaponsRef.current = weaponsRef.current.map((w) =>
+          w.id === baseId
+            ? { id: evoId, level: 5, cooldownTimer: 0 }
+            : w,
+        );
+      } else {
+        weaponsRef.current.push({
+          id: evoId,
+          level: 5,
+          cooldownTimer: 0,
+        });
+      }
+      addFloatingText(
+        "✨ ЭВОЛЮЦИЯ ОРУЖИЯ! ✨",
+        playerRef.current.x,
+        playerRef.current.y - 32,
+        "#ffd700",
+      );
+      playSound("gameWin", tamagotchi.soundEnabled);
+      triggerHaptic("heavy");
+    } else if (card.type === "NEW_WEAPON" && card.weaponId) {
       weaponsRef.current.push({
         id: card.weaponId,
         level: 1,
@@ -641,6 +741,27 @@ export function TamagotchiSurvivors({
         player.iFrameTimer -= dt;
       }
 
+      // Combo decay timer & HUD indicator
+      if (comboTimerRef.current > 0) {
+        comboTimerRef.current -= dt;
+        if (comboTimerRef.current <= 0) {
+          comboCountRef.current = 0;
+        }
+      }
+      if (hudComboRef.current) {
+        if (comboCountRef.current >= 5) {
+          hudComboRef.current.style.display = "inline-block";
+          hudComboRef.current.textContent = `🔥 x${comboCountRef.current}`;
+        } else {
+          hudComboRef.current.style.display = "none";
+        }
+      }
+
+      // Combo Frenzy: at 20+ combo, player gains +15% move speed & +15% fire rate!
+      const isFrenzy = comboCountRef.current >= 20;
+      const frenzySpeedMult = isFrenzy ? 1.15 : 1.0;
+      const frenzyCooldownMult = isFrenzy ? 0.85 : 1.0;
+
       // 1. Calculate Movement Vector (Joystick + Keyboard)
       let moveX = joystickOffsetRef.current.x;
       let moveY = joystickOffsetRef.current.y;
@@ -655,8 +776,8 @@ export function TamagotchiSurvivors({
       if (moveLen > 0.05) {
         const normX = moveX / Math.max(1, moveLen);
         const normY = moveY / Math.max(1, moveLen);
-        player.x += normX * player.speed * dt;
-        player.y += normY * player.speed * dt;
+        player.x += normX * player.speed * frenzySpeedMult * dt;
+        player.y += normY * player.speed * frenzySpeedMult * dt;
         player.facingX = normX;
         player.facingY = normY;
       }
@@ -692,7 +813,8 @@ export function TamagotchiSurvivors({
           const cooldown =
             ((def.baseCooldown / (1 + (w.level - 1) * 0.15)) *
               globalCooldownMult) *
-            berserkCooldownMult;
+            berserkCooldownMult *
+            frenzyCooldownMult;
           w.cooldownTimer = cooldown;
 
           const damage = Math.round(
@@ -735,6 +857,36 @@ export function TamagotchiSurvivors({
               });
               playSound("click", tamagotchi.soundEnabled);
             }
+          } else if (w.id === "laser_beam_evo") {
+            // Evolved Quantum Disrupter: 3 piercing hyper-beams hitting 3 closest targets!
+            const targets = enemiesRef.current
+              .map((en) => ({ en, d: Math.hypot(en.x - player.x, en.y - player.y) }))
+              .filter((item) => item.d < 680)
+              .sort((a, b) => a.d - b.d)
+              .slice(0, 3);
+
+            targets.forEach(({ en }) => {
+              const dx = en.x - player.x;
+              const dy = en.y - player.y;
+              const angle = Math.atan2(dy, dx);
+              projectilesRef.current.push({
+                id: nextEntityIdRef.current++,
+                weaponId: "laser_beam_evo",
+                x: player.x,
+                y: player.y,
+                vx: Math.cos(angle) * def.baseSpeed,
+                vy: Math.sin(angle) * def.baseSpeed,
+                damage,
+                radius: 12 * globalAreaMult,
+                lifeTime: 1.1,
+                pierce: 99,
+                glyph: "══►",
+                color: "#c084fc",
+              });
+            });
+            if (targets.length > 0) {
+              playSound("tesla", tamagotchi.soundEnabled);
+            }
           } else if (w.id === "plasma_pulse") {
             // Rapid plasma burst in facing direction
             projectilesRef.current.push({
@@ -750,6 +902,28 @@ export function TamagotchiSurvivors({
               pierce: 1 + Math.floor(w.level / 2),
               glyph: "[=>>]",
               color: "#00f0ff",
+            });
+            playSound("click", tamagotchi.soundEnabled);
+          } else if (w.id === "plasma_pulse_evo") {
+            // Evolved Hyper Nova: 5-way spread of bouncing plasma spheres
+            const baseAngle = Math.atan2(player.facingY, player.facingX);
+            const spreadOffsets = [-0.35, -0.18, 0, 0.18, 0.35];
+            spreadOffsets.forEach((offset) => {
+              const a = baseAngle + offset;
+              projectilesRef.current.push({
+                id: nextEntityIdRef.current++,
+                weaponId: "plasma_pulse_evo",
+                x: player.x,
+                y: player.y,
+                vx: Math.cos(a) * def.baseSpeed,
+                vy: Math.sin(a) * def.baseSpeed,
+                damage,
+                radius: 14,
+                lifeTime: 0.95,
+                pierce: 3,
+                glyph: "[✦]",
+                color: "#38bdf8",
+              });
             });
             playSound("click", tamagotchi.soundEnabled);
           } else if (w.id === "cyber_blade") {
@@ -791,6 +965,36 @@ export function TamagotchiSurvivors({
               lifeTime: 0.16,
               pierce: 999,
             });
+          } else if (w.id === "cyber_blade_evo") {
+            // Evolved Photon Executioner: 360° circular sonic slice wave!
+            playSound("reflect", tamagotchi.soundEnabled);
+            const slashRange = def.baseArea * globalAreaMult;
+
+            enemiesRef.current.forEach((en) => {
+              const dx = en.x - player.x;
+              const dy = en.y - player.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist <= slashRange + en.radius) {
+                en.hp -= damage;
+                const knockAng = Math.atan2(dy, dx);
+                en.x += Math.cos(knockAng) * 60;
+                en.y += Math.sin(knockAng) * 60;
+                addFloatingText(
+                  `⚡${damage}`,
+                  en.x,
+                  en.y - 14,
+                  "#ffd700",
+                );
+              }
+            });
+
+            reflectRingsRef.current.push({
+              x: player.x,
+              y: player.y,
+              radius: 18,
+              maxRadius: slashRange,
+              life: 0.28,
+            });
           } else if (w.id === "glitch_darts") {
             const count = def.baseCount + Math.floor(w.level / 2);
             for (let i = 0; i < count; i++) {
@@ -812,18 +1016,75 @@ export function TamagotchiSurvivors({
                 color: "#ffaa00",
               });
             }
+          } else if (w.id === "lightning_strike") {
+            const target = enemiesRef.current[Math.floor(Math.random() * enemiesRef.current.length)];
+            if (target) {
+              target.hp -= damage;
+              addFloatingText(`⚡${damage}`, target.x, target.y - 14, "#00f0ff");
+              lightningBoltsRef.current.push({
+                x1: target.x,
+                y1: target.y - 160,
+                x2: target.x,
+                y2: target.y,
+                life: 0.2,
+              });
+              playSound("tesla", tamagotchi.soundEnabled);
+            }
+          } else if (w.id === "lightning_strike_evo") {
+            // Evolved Thunderstorm: 4 simultaneous lightning strikes!
+            const targets = [...enemiesRef.current]
+              .sort(() => Math.random() - 0.5)
+              .slice(0, 4);
+
+            targets.forEach((target) => {
+              target.hp -= damage;
+              addFloatingText(`⚡${damage}`, target.x, target.y - 14, "#c084fc");
+              lightningBoltsRef.current.push({
+                x1: target.x,
+                y1: target.y - 190,
+                x2: target.x,
+                y2: target.y,
+                life: 0.25,
+              });
+            });
+            if (targets.length > 0) {
+              playSound("tesla", tamagotchi.soundEnabled);
+            }
+          } else if (w.id === "shockwave") {
+            playSound("bomb", tamagotchi.soundEnabled);
+            const radius = def.baseArea * globalAreaMult;
+            enemiesRef.current.forEach((en) => {
+              const dist = Math.hypot(en.x - player.x, en.y - player.y);
+              if (dist <= radius + en.radius) {
+                en.hp -= damage;
+                const ang = Math.atan2(en.y - player.y, en.x - player.x);
+                en.x += Math.cos(ang) * 45;
+                en.y += Math.sin(ang) * 45;
+                addFloatingText(`💥${damage}`, en.x, en.y - 12, "#ffaa00");
+              }
+            });
+            reflectRingsRef.current.push({
+              x: player.x,
+              y: player.y,
+              radius: 12,
+              maxRadius: radius,
+              life: 0.22,
+            });
           }
         }
       });
 
-      // 3. Orbiting ASCII Satellites System (Scales with player effort & level)
-      const satCount = Math.min(
-        6,
-        2 + Math.floor(levelRef.current / 3) +
-          (weaponsRef.current.find((w) => w.id === "orbit_shards")?.level ?? 0),
-      );
-      const orbitSpeed = runSecondsRef.current * 3.5;
-      const orbitRadius = 48 + Math.min(22, levelRef.current * 2);
+      // 3. Orbiting ASCII Satellites System (Scales with player effort, level & evolutions)
+      const hasEvoOrbit = weaponsRef.current.some((w) => w.id === "orbit_shards_evo");
+      const satCount = hasEvoOrbit
+        ? 6
+        : Math.min(
+            6,
+            2 + Math.floor(levelRef.current / 3) +
+              (weaponsRef.current.find((w) => w.id === "orbit_shards")?.level ?? 0),
+          );
+      const orbitSpeed = runSecondsRef.current * (hasEvoOrbit ? 5.2 : 3.5);
+      const orbitRadius = hasEvoOrbit ? 64 : 48 + Math.min(22, levelRef.current * 2);
 
       // Satellite periodic burst fire at distant enemies
       satelliteShootTimerRef.current -= dt;
@@ -1146,52 +1407,173 @@ export function TamagotchiSurvivors({
         }
       }
 
-      // 5. Enemy Spawning Wave Engine (Capped at 40 enemies max)
+      // 5. Scripted Wave Event Engine (Milestones & Dopamine Bursts)
+      const timeSec = runSecondsRef.current;
+      const waveMilestones = waveMilestonesRef.current;
+
+      // Event 1: 0:40 - Swarm wave (14 fast bugs rushing in)
+      if (timeSec >= 40 && !waveMilestones.has("SWARM_1")) {
+        waveMilestones.add("SWARM_1");
+        playSound("bomb", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("⚠️ ВСПЛЕСК ВИРУСОВ! РОЙ! ⚠️", player.x, player.y - 45, "#00ff88");
+        for (let i = 0; i < 14; i++) {
+          const ang = (i / 14) * Math.PI * 2;
+          enemiesRef.current.push({
+            id: nextEntityIdRef.current++,
+            type: "BUG",
+            x: player.x + Math.cos(ang) * 620,
+            y: player.y + Math.sin(ang) * 620,
+            hp: Math.round(28 * dangerMult),
+            maxHp: Math.round(28 * dangerMult),
+            speed: 135,
+            damage: Math.round(8 * dangerMult),
+            radius: 13,
+            glyph: "[BUG]",
+            color: "#00ff88",
+          });
+        }
+      }
+
+      // Event 2: 1:15 (75s) - Elite Champion with Chest
+      if (timeSec >= 75 && !waveMilestones.has("ELITE_1")) {
+        waveMilestones.add("ELITE_1");
+        playSound("bomb", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("👑 ЭЛИТНЫЙ ЧЕМПИОН [СУНДУК]!", player.x, player.y - 45, "#fbbf24");
+        enemiesRef.current.push({
+          id: nextEntityIdRef.current++,
+          type: "TANK",
+          x: player.x + 650,
+          y: player.y,
+          hp: Math.round(420 * dangerMult),
+          maxHp: Math.round(420 * dangerMult),
+          speed: 68,
+          damage: Math.round(22 * dangerMult),
+          radius: 28,
+          glyph: "👑TANK",
+          color: "#fbbf24",
+          isElite: true,
+          affix: "SHIELD",
+        });
+      }
+
+      // Event 3: 1:50 (110s) - Ring Encirclement (16 skulls in tight 360 circle)
+      if (timeSec >= 110 && !waveMilestones.has("RING_1")) {
+        waveMilestones.add("RING_1");
+        playSound("bomb", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("⚡ ОКРУЖЕНИЕ! ПРОРЫВАЙСЯ! ⚡", player.x, player.y - 45, "#ff3366");
+        for (let i = 0; i < 16; i++) {
+          const ang = (i / 16) * Math.PI * 2;
+          enemiesRef.current.push({
+            id: nextEntityIdRef.current++,
+            type: "SKULL",
+            x: player.x + Math.cos(ang) * 580,
+            y: player.y + Math.sin(ang) * 580,
+            hp: Math.round(95 * dangerMult),
+            maxHp: Math.round(95 * dangerMult),
+            speed: 80,
+            damage: Math.round(15 * dangerMult),
+            radius: 18,
+            glyph: "☠SKULL",
+            color: "#ffaa00",
+          });
+        }
+      }
+
+      // Event 4: 2:30 (150s) - Heavy Vanguard (2 Elite Skulls with FAST affix)
+      if (timeSec >= 150 && !waveMilestones.has("VANGUARD_1")) {
+        waveMilestones.add("VANGUARD_1");
+        playSound("bomb", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("🛡️ ТЯЖЕЛЫЙ АВАНГАРД [2 СУНДУКА]!", player.x, player.y - 45, "#f43f5e");
+        [-1, 1].forEach((side) => {
+          enemiesRef.current.push({
+            id: nextEntityIdRef.current++,
+            type: "SKULL",
+            x: player.x + side * 620,
+            y: player.y,
+            hp: Math.round(360 * dangerMult),
+            maxHp: Math.round(360 * dangerMult),
+            speed: 95,
+            damage: Math.round(20 * dangerMult),
+            radius: 22,
+            glyph: "👑SKULL",
+            color: "#f43f5e",
+            isElite: true,
+            affix: "FAST",
+          });
+        });
+      }
+
+      // Event 5: 3:00 (180s) - Apex Cyber-Reaper Boss
+      if (timeSec >= 180 && !waveMilestones.has("APEX_BOSS")) {
+        waveMilestones.add("APEX_BOSS");
+        playSound("bomb", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("☠️ СУПЕР-БОСС: РЕЙДЕР СЕТИ! ☠️", player.x, player.y - 50, "#ff007f");
+        enemiesRef.current.push({
+          id: nextEntityIdRef.current++,
+          type: "BOSS",
+          x: player.x,
+          y: player.y - 600,
+          hp: Math.round(2200 * dangerMult),
+          maxHp: Math.round(2200 * dangerMult),
+          speed: 70,
+          damage: Math.round(32 * dangerMult),
+          radius: 38,
+          glyph: "☠APEX-REAPER☠",
+          color: "#ff007f",
+          isBoss: true,
+        });
+      }
+
+      // Regular continuous enemy spawning (Capped at 45 enemies max)
       spawnTimerRef.current -= dt;
-      if (spawnTimerRef.current <= 0 && enemiesRef.current.length < 40) {
-        const timeSec = runSecondsRef.current;
-        const spawnDelay = Math.max(0.22, 0.85 - timeSec * 0.0035);
+      if (spawnTimerRef.current <= 0 && enemiesRef.current.length < 45) {
+        const spawnDelay = Math.max(0.20, 0.80 - timeSec * 0.0035);
         spawnTimerRef.current = spawnDelay;
 
         const spawnAngle = Math.random() * Math.PI * 2;
-        const spawnDist = 720 + Math.random() * 150;
+        const spawnDist = 720 + Math.random() * 140;
         const exX = player.x + Math.cos(spawnAngle) * spawnDist;
         const ey = player.y + Math.sin(spawnAngle) * spawnDist;
 
         let type: EnemyEntity["type"] = "BUG";
-        let hp = 35 + Math.floor(timeSec * 0.7);
-        let speed = 90 + Math.random() * 20;
+        let hp = Math.round((35 + Math.floor(timeSec * 0.75)) * dangerMult);
+        let speed = (90 + Math.random() * 20) * (1 + (dangerTier - 1) * 0.035);
         let glyph = "[BUG]";
         let radius = 14;
         let color = "#00ff88";
 
-        if (timeSec > 120 && Math.random() < 0.25) {
+        if (timeSec > 120 && Math.random() < 0.28) {
           type = "SKULL";
-          hp = 110 + Math.floor(timeSec * 1.3);
-          speed = 75;
+          hp = Math.round((115 + Math.floor(timeSec * 1.35)) * dangerMult);
+          speed = 78 * (1 + (dangerTier - 1) * 0.03);
           glyph = "☠SKULL";
           radius = 18;
           color = "#ffaa00";
-        } else if (timeSec > 75 && Math.random() < 0.22) {
+        } else if (timeSec > 75 && Math.random() < 0.25) {
           type = "TANK";
-          hp = 200 + Math.floor(timeSec * 1.6);
-          speed = 60;
+          hp = Math.round((210 + Math.floor(timeSec * 1.65)) * dangerMult);
+          speed = 62;
           glyph = "[#▓#]";
           radius = 24;
           color = "#ff3366";
-        } else if (timeSec > 40 && Math.random() < 0.35) {
+        } else if (timeSec > 35 && Math.random() < 0.38) {
           type = "WORM";
-          hp = 50 + Math.floor(timeSec * 0.85);
-          speed = 120;
+          hp = Math.round((52 + Math.floor(timeSec * 0.9)) * dangerMult);
+          speed = 125 * (1 + (dangerTier - 1) * 0.03);
           glyph = "~WORM~";
           radius = 16;
           color = "#00f0ff";
         }
 
-        // Mini-boss at 2 minutes
+        // Mini-boss at 2 minutes (120s) if no boss active
         if (Math.floor(timeSec) === 120 && !enemiesRef.current.some((e) => e.isBoss)) {
           type = "BOSS";
-          hp = 1400;
+          hp = Math.round(1400 * dangerMult);
           speed = 65;
           glyph = "⚡MEGA-DAEMON⚡";
           radius = 36;
@@ -1208,7 +1590,10 @@ export function TamagotchiSurvivors({
           hp,
           maxHp: hp,
           speed,
-          damage: type === "BOSS" ? 28 : type === "TANK" ? 18 : 11,
+          damage: Math.round(
+            (type === "BOSS" ? 28 : type === "TANK" ? 18 : 11) *
+              (1 + (dangerTier - 1) * 0.15),
+          ),
           radius,
           glyph,
           color,
@@ -1401,24 +1786,59 @@ export function TamagotchiSurvivors({
         }
       });
 
-      // Handle Enemy Deaths & Drop Spawns (Capped drops to 35 max)
+      // Handle Enemy Deaths & Drop Spawns (Capped drops to 40 max)
       const aliveEnemies: EnemyEntity[] = [];
       enemiesRef.current.forEach((en) => {
         if (en.hp <= 0) {
           killsRef.current += 1;
 
-          // Vampirism (Balanced: +1 bug, +5 tank, +30 boss)
+          // Combo streak engine
+          comboCountRef.current += 1;
+          comboTimerRef.current = 2.8;
+          const combo = comboCountRef.current;
+          if (combo === 15) {
+            addFloatingText("🔥 КОМБО x15!", player.x, player.y - 25, "#f59e0b");
+            playSound("combo", tamagotchi.soundEnabled);
+          } else if (combo === 30) {
+            addFloatingText("💥 УЛЬТРА x30!", player.x, player.y - 25, "#ec4899");
+            playSound("combo", tamagotchi.soundEnabled);
+          } else if (combo === 50) {
+            addFloatingText("⚡ КИБЕР-БУЙСТВО x50!", player.x, player.y - 25, "#00f0ff");
+            playSound("gameWin", tamagotchi.soundEnabled);
+          }
+
+          // Vampirism (Balanced & scaling with danger tier: +1 bug, +5 tank, +12 elite, +35 boss)
           if (activeBuff === "VAMPIRISM") {
-            const drain = en.isBoss ? 30 : en.type === "TANK" ? 5 : 1;
+            const drain = en.isBoss
+              ? 35
+              : en.isElite
+              ? 12
+              : en.type === "TANK"
+              ? 5
+              : Math.max(2, Math.floor(dangerTier * 1.1));
             player.hp = Math.min(player.maxHp, player.hp + drain);
             addFloatingText(`+${drain} HP`, player.x, player.y - 18, "#00ff66");
           }
 
+          // Guaranteed Cyber Chest Drop from Elites and Bosses
+          if (en.isElite || en.isBoss) {
+            dropsRef.current.push({
+              id: nextEntityIdRef.current++,
+              type: "CHEST",
+              x: en.x,
+              y: en.y,
+              value: Math.round((en.isBoss ? 150 : 75) * byteMultiplier * dangerMult),
+              radius: 18,
+            });
+            playSound("gameWin", tamagotchi.soundEnabled);
+            addFloatingText("🎁 СУПЕР-СУНДУК!", en.x, en.y - 20, "#ffd700");
+          }
+
           // Smart Medkit drop rate (more when hurt)
-          const hurtFactor = player.hp < player.maxHp * 0.35 ? 0.16 : 0.05;
+          const hurtFactor = player.hp < player.maxHp * 0.35 ? 0.18 : 0.05;
           const dropRoll = Math.random();
 
-          if (dropsRef.current.length < 35) {
+          if (dropsRef.current.length < 40) {
             if (dropRoll < hurtFactor) {
               dropsRef.current.push({
                 id: nextEntityIdRef.current++,
@@ -1434,7 +1854,7 @@ export function TamagotchiSurvivors({
                 type: "COIN",
                 x: en.x,
                 y: en.y,
-                value: Math.round((en.isBoss ? 35 : 4) * byteMultiplier),
+                value: Math.round((en.isBoss ? 45 : 4) * byteMultiplier * dangerMult),
                 radius: 12,
               });
             } else {
@@ -1443,7 +1863,7 @@ export function TamagotchiSurvivors({
                 type: "EXP",
                 x: en.x,
                 y: en.y,
-                value: en.isBoss ? 60 : 9,
+                value: Math.round((en.isBoss ? 75 : 9) * (1 + (dangerTier - 1) * 0.12)),
                 radius: 10,
               });
             }
@@ -1451,8 +1871,8 @@ export function TamagotchiSurvivors({
 
           if (en.isBoss) {
             playSound("gameWin", tamagotchi.soundEnabled);
-            addFloatingText("БОСС ПОВЕРЖЕН! +50 B", en.x, en.y, "#ffcc00");
-            bytesRef.current += 50;
+            addFloatingText("БОСС ПОВЕРЖЕН! +100 B", en.x, en.y, "#ffcc00");
+            bytesRef.current += Math.round(100 * byteMultiplier * dangerMult);
           }
         } else {
           aliveEnemies.push(en);
@@ -1499,6 +1919,14 @@ export function TamagotchiSurvivors({
             playSound("coin", tamagotchi.soundEnabled);
             bytesRef.current += drop.value;
             addFloatingText(`+${drop.value} B`, drop.x, drop.y - 12, "#ffdd00");
+          } else if (drop.type === "CHEST") {
+            playSound("gameWin", tamagotchi.soundEnabled);
+            triggerHaptic("heavy");
+            bytesRef.current += drop.value;
+            player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4);
+            addFloatingText(`🎁 СУНДУК: +${drop.value} B +40% HP!`, player.x, player.y - 30, "#ffd700");
+            setIsLevelingUp(true);
+            setUpgradeCards(generateUpgradeCards(weaponsRef.current));
           }
         } else {
           remainingDrops.push(drop);
@@ -1671,17 +2099,35 @@ export function TamagotchiSurvivors({
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("[$]", drop.x, drop.y);
+        } else if (drop.type === "CHEST") {
+          ctx.fillStyle = "#ffd700";
+          setFont("bold 15px monospace");
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🎁", drop.x, drop.y);
+
+          ctx.strokeStyle = "rgba(255, 215, 0, 0.5)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(
+            drop.x,
+            drop.y,
+            14 + Math.sin(runSecondsRef.current * 8) * 3,
+            0,
+            Math.PI * 2,
+          );
+          ctx.stroke();
         }
       });
 
       // Draw Projectiles
       projectilesRef.current.forEach((p) => {
-        if (p.weaponId === "laser_beam") {
+        if (p.weaponId === "laser_beam" || p.weaponId === "laser_beam_evo") {
           ctx.strokeStyle = p.color ?? "#00ff88";
-          ctx.lineWidth = 3;
+          ctx.lineWidth = p.weaponId === "laser_beam_evo" ? 5 : 3;
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
-          ctx.lineTo(p.x - (p.vx / 550) * 26, p.y - (p.vy / 550) * 26);
+          ctx.lineTo(p.x - (p.vx / 550) * 30, p.y - (p.vy / 550) * 30);
           ctx.stroke();
         } else if (p.weaponId === "cyber_blade") {
           ctx.strokeStyle = "rgba(0, 255, 102, 0.8)";
@@ -1706,6 +2152,18 @@ export function TamagotchiSurvivors({
 
       // Draw ASCII Enemies
       enemiesRef.current.forEach((en) => {
+        if (en.isElite) {
+          ctx.strokeStyle = "#fbbf24";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(en.x, en.y, en.radius + 6, 0, Math.PI * 2);
+          ctx.stroke();
+
+          setFont("bold 8px monospace");
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillText("👑 ELITE", en.x, en.y - en.radius - 14);
+        }
+
         const enemyDef = ASCII_ENEMY_SPRITES[en.type] ?? ASCII_ENEMY_SPRITES.BUG;
         const frameIdx = Math.floor(runSecondsRef.current * 4) % enemyDef.frames.length;
         const lines = enemyDef.frames[frameIdx];
@@ -1992,11 +2450,12 @@ export function TamagotchiSurvivors({
     byteMultiplier,
     medkitHealAmount,
     hasRevive,
+    dangerMult,
     themeColors.glow,
     themeColors.primary,
   ]);
 
-  // Finish run handler (Awards +50% for Safe Extraction)
+  // Finish run handler (Awards +50% for Safe Extraction & Overtime push-your-luck multiplier)
   const handleCompleteRun = () => {
     const multiplier = activeBuff === "QUANTUM_RISK" ? 3 : 1;
     const morningExpMult =
@@ -2004,10 +2463,19 @@ export function TamagotchiSurvivors({
         ? 1.25
         : 1.0;
     const extractionMult = isExtracted ? 1.5 : 1.0;
+    // Overtime bonus: +25% bonus for every 30s survived past 3 minutes (180s)
+    const overtimeBonus =
+      runSecondsRef.current > 180
+        ? 1 + Math.min(2.0, Math.floor((runSecondsRef.current - 180) / 30) * 0.25)
+        : 1.0;
 
     const baseExp = killsRef.current * 4 + levelRef.current * 15;
-    const totalExp = Math.floor(baseExp * multiplier * morningExpMult * extractionMult);
-    const totalBytes = Math.floor(bytesRef.current * multiplier * extractionMult);
+    const totalExp = Math.floor(
+      baseExp * multiplier * morningExpMult * extractionMult * dangerMult * overtimeBonus,
+    );
+    const totalBytes = Math.floor(
+      bytesRef.current * multiplier * extractionMult * overtimeBonus,
+    );
 
     onFinishRun({
       survivedTime: runSecondsRef.current,
@@ -2058,9 +2526,9 @@ export function TamagotchiSurvivors({
           paddingRight: "max(env(safe-area-inset-right, 0px), 12px)",
         }}
       >
-        <div className="flex items-center justify-between gap-1.5">
-          {/* Left stats: Time, Kills, Bytes, Buff */}
-          <div className="flex items-center gap-2 font-bold min-w-0">
+        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+          {/* Left stats: Time, Kills, Bytes, Danger Tier, Live Combo, Buff */}
+          <div className="flex items-center gap-1.5 font-bold min-w-0 flex-wrap">
             <span ref={hudTimeRef} className="text-yellow-400 text-sm font-black whitespace-nowrap">
               ⏱ 00:00
             </span>
@@ -2069,6 +2537,25 @@ export function TamagotchiSurvivors({
             </span>
             <span ref={hudBytesRef} className="text-yellow-400 text-[0.70rem] whitespace-nowrap">
               💰 0
+            </span>
+            {/* Adaptive Sector Danger Tier Badge */}
+            <span
+              className="px-1.5 py-0.2 border text-[0.55rem] font-black uppercase whitespace-nowrap"
+              style={{
+                borderColor: dangerTier > 5 ? "#ef4444" : "#f59e0b",
+                color: dangerTier > 5 ? "#ef4444" : "#f59e0b",
+                backgroundColor: "rgba(0,0,0,0.6)",
+              }}
+              title={`Сектор опасности T-${dangerTier} (Множитель наград x${Math.round(dangerMult * 10) / 10})`}
+            >
+              ⚠️ Т-{dangerTier} ({Math.round(dangerMult * 10) / 10}x)
+            </span>
+            {/* Live Combo Badge */}
+            <span
+              ref={hudComboRef}
+              className="hidden px-1.5 py-0.2 border border-orange-500 bg-orange-950/60 text-orange-400 text-[0.58rem] font-black uppercase whitespace-nowrap animate-pulse"
+            >
+              🔥 x0
             </span>
             {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
               <span
@@ -2253,6 +2740,15 @@ export function TamagotchiSurvivors({
                   </span>
                 </div>
               )}
+              <div className="col-span-2 border-t border-white/10 pt-1 flex justify-between items-center text-[0.60rem]">
+                <span className="text-white/50">СЕКТОР УГРОЗЫ:</span>
+                <span
+                  className="font-bold"
+                  style={{ color: dangerTier > 5 ? "#ef4444" : "#f59e0b" }}
+                >
+                  Т-{dangerTier} (Лут {Math.round(dangerMult * 10) / 10}x)
+                </span>
+              </div>
             </div>
 
             {/* Equipped weapons */}
@@ -2326,28 +2822,42 @@ export function TamagotchiSurvivors({
             </div>
 
             <div className="my-2.5 flex flex-col gap-2">
-              {upgradeCards.map((card) => (
-                <button
-                  key={card.id}
-                  onClick={() => handleSelectUpgrade(card)}
-                  type="button"
-                  className="flex items-center gap-3 border p-2.5 text-left transition hover:bg-white/10 active:scale-95 bg-black/60"
-                  style={{ borderColor: themeColors.border }}
-                >
-                  <span className="text-2xl">{card.glyph}</span>
-                  <div className="flex-1">
-                    <span
-                      className="font-black text-xs block"
-                      style={{ color: themeColors.primary }}
-                    >
-                      {card.title}
-                    </span>
-                    <p className="text-[0.58rem] text-white/70 mt-0.5">
-                      {card.desc}
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {upgradeCards.map((card) => {
+                const isEvo = card.type === "EVOLUTION";
+                return (
+                  <button
+                    key={card.id}
+                    onClick={() => handleSelectUpgrade(card)}
+                    type="button"
+                    className={`flex items-center gap-3 border p-2.5 text-left transition active:scale-95 ${
+                      isEvo
+                        ? "bg-amber-950/40 hover:bg-amber-900/60 animate-pulse"
+                        : "bg-black/60 hover:bg-white/10"
+                    }`}
+                    style={{
+                      borderColor: isEvo ? "#ffd700" : themeColors.border,
+                      boxShadow: isEvo
+                        ? "0 0 16px rgba(255, 215, 0, 0.4)"
+                        : undefined,
+                    }}
+                  >
+                    <span className="text-2xl">{card.glyph}</span>
+                    <div className="flex-1">
+                      <span
+                        className="font-black text-xs block"
+                        style={{
+                          color: isEvo ? "#ffd700" : themeColors.primary,
+                        }}
+                      >
+                        {card.title}
+                      </span>
+                      <p className="text-[0.58rem] text-white/70 mt-0.5">
+                        {card.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2418,6 +2928,20 @@ export function TamagotchiSurvivors({
                   +{bytesRef.current} B {isExtracted && "(+50%)"}
                 </span>
               </div>
+              <div className="col-span-2 mt-1.5 border-t border-white/10 pt-1.5 flex justify-between items-center text-[0.60rem]">
+                <span className="text-white/50">СЕКТОР:</span>
+                <span className="font-bold text-amber-400">
+                  Т-{dangerTier} (Множитель лута {Math.round(dangerMult * 10) / 10}x)
+                </span>
+              </div>
+              {runSecondsRef.current > 180 && (
+                <div className="col-span-2 border-t border-white/10 pt-1 flex justify-between items-center text-[0.60rem]">
+                  <span className="text-white/50">ОВЕРТАЙМ:</span>
+                  <span className="font-bold text-red-400 animate-pulse">
+                    +{Math.round(Math.min(2.0, Math.floor((runSecondsRef.current - 180) / 30) * 0.25) * 100)}% БОНУС!
+                  </span>
+                </div>
+              )}
             </div>
 
             <button

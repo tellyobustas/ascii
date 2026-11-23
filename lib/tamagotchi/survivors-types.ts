@@ -111,6 +111,83 @@ export const WEAPON_REGISTRY: Record<string, WeaponDef> = {
     baseArea: 20,
     baseCount: 1,
   },
+
+  // ==========================================
+  // ЭВОЛЮЦИИ ОРУЖИЯ (LEGENDARY EVOLVED WEAPONS)
+  // ==========================================
+  cyber_blade_evo: {
+    id: "cyber_blade_evo",
+    name: "Photon Executioner",
+    nameRu: "Фотонный Палач",
+    category: "MELEE",
+    description: "Круговой 360° вихрь света, сокрушающий врагов в прах.",
+    glyph: "⚡⚔️",
+    baseDamage: 72,
+    baseCooldown: 0.60,
+    baseSpeed: 0,
+    baseArea: 140,
+    baseCount: 1,
+  },
+  laser_beam_evo: {
+    id: "laser_beam_evo",
+    name: "Quantum Disrupter",
+    nameRu: "Квантовый Разрыватель",
+    category: "RANGED",
+    description: "Тройной пронзающий гипер-луч с квантовыми искрами.",
+    glyph: "🔮",
+    baseDamage: 60,
+    baseCooldown: 0.72,
+    baseSpeed: 680,
+    baseArea: 1,
+    baseCount: 3,
+  },
+  plasma_pulse_evo: {
+    id: "plasma_pulse_evo",
+    name: "Hyper Nova",
+    nameRu: "Гипер-Нова",
+    category: "RANGED",
+    description: "Веер из 5 плазменных ядер, разрывающихся на части.",
+    glyph: "💥",
+    baseDamage: 52,
+    baseCooldown: 0.45,
+    baseSpeed: 580,
+    baseArea: 28,
+    baseCount: 5,
+  },
+  orbit_shards_evo: {
+    id: "orbit_shards_evo",
+    name: "Vortex Aegis",
+    nameRu: "Вихревой Щит",
+    category: "MELEE",
+    description: "6 сверхзвуковых щитов отражают и распыляют вирусы.",
+    glyph: "💠",
+    baseDamage: 48,
+    baseCooldown: 1.5,
+    baseSpeed: 5.5,
+    baseArea: 90,
+    baseCount: 6,
+  },
+  lightning_strike_evo: {
+    id: "lightning_strike_evo",
+    name: "Thunderstorm",
+    nameRu: "Громовой Шторм",
+    category: "RANGED",
+    description: "4 разрушительных удара молнии по экрану одновременно.",
+    glyph: "🌩️⚡",
+    baseDamage: 135,
+    baseCooldown: 1.25,
+    baseSpeed: 0,
+    baseArea: 75,
+    baseCount: 4,
+  },
+};
+
+export const EVOLUTION_MAP: Record<string, string> = {
+  cyber_blade: "cyber_blade_evo",
+  laser_beam: "laser_beam_evo",
+  plasma_pulse: "plasma_pulse_evo",
+  orbit_shards: "orbit_shards_evo",
+  lightning_strike: "lightning_strike_evo",
 };
 
 export interface ActiveWeapon {
@@ -119,7 +196,7 @@ export interface ActiveWeapon {
   cooldownTimer: number;
 }
 
-export type UpgradeCardType = "NEW_WEAPON" | "UPGRADE_WEAPON" | "PASSIVE";
+export type UpgradeCardType = "NEW_WEAPON" | "UPGRADE_WEAPON" | "PASSIVE" | "EVOLUTION";
 
 export interface UpgradeCard {
   id: string;
@@ -146,12 +223,14 @@ export interface EnemyEntity {
   glyph: string;
   color: string;
   isBoss?: boolean;
+  isElite?: boolean;
+  affix?: "FAST" | "SHIELD" | "EXPLOSIVE";
   shootTimer?: number;
   chargeTimer?: number;
   isCharging?: boolean;
 }
 
-export type DropType = "EXP" | "MEDKIT" | "COIN" | "MAGNET" | "NUKE";
+export type DropType = "EXP" | "MEDKIT" | "COIN" | "CHEST" | "MAGNET" | "NUKE";
 
 export interface DropEntity {
   id: number;
