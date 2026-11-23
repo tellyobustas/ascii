@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   WEAPON_REGISTRY,
@@ -252,7 +252,7 @@ export function TamagotchiSurvivors({
   const hasRevive = (skillTree.SECOND_CHANCE ?? 0) > 0;
 
   // React states (Only used for pause modals to ensure 0% React re-render churn during 60fps play)
-  const [mounted, setMounted] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isLevelingUp, setIsLevelingUp] = useState(false);
   const [upgradeCards, setUpgradeCards] = useState<UpgradeCard[]>([]);
@@ -260,8 +260,18 @@ export function TamagotchiSurvivors({
   const [runWon, setRunWon] = useState(false);
   const [isExtracted, setIsExtracted] = useState(false);
 
+  const setCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+    if (node) {
+      setCanvasReady(true);
+    }
+  }, []);
+
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+  }, []);
+
   useEffect(() => {
-    setMounted(true);
     window.scrollTo(0, 0);
   }, []);
 
@@ -411,8 +421,10 @@ export function TamagotchiSurvivors({
     const updateSize = () => {
       const rect = container.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-      const targetW = Math.max(320, Math.floor(rect.width * dpr));
-      const targetH = Math.max(400, Math.floor(rect.height * dpr));
+      const measuredW = rect.width > 0 ? rect.width : window.innerWidth;
+      const measuredH = rect.height > 0 ? rect.height : (window.innerHeight - 80);
+      const targetW = Math.max(320, Math.floor(measuredW * dpr));
+      const targetH = Math.max(400, Math.floor(measuredH * dpr));
       if (canvas.width !== targetW || canvas.height !== targetH) {
         canvas.width = targetW;
         canvas.height = targetH;
@@ -422,11 +434,13 @@ export function TamagotchiSurvivors({
     updateSize();
     const ro = new ResizeObserver(() => updateSize());
     ro.observe(container);
+    window.addEventListener("resize", updateSize);
 
     return () => {
       ro.disconnect();
+      window.removeEventListener("resize", updateSize);
     };
-  }, []);
+  }, [canvasReady]);
 
   // Keyboard listeners for desktop support
   useEffect(() => {
@@ -593,6 +607,17 @@ export function TamagotchiSurvivors({
       const rawDelta = lastTimestamp === 0 ? 0.016 : (timestamp - lastTimestamp) / 1000;
       const dt = Math.min(Math.max(rawDelta, 0.008), 0.05);
       lastTimestamp = timestamp;
+
+      // Self-heal canvas size if not yet sized
+      if (canvas.width <= 1 || canvas.height <= 1) {
+        const container = containerRef.current;
+        const rect = container?.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+        const w = (rect && rect.width > 0 ? rect.width : window.innerWidth) || 360;
+        const h = (rect && rect.height > 0 ? rect.height : window.innerHeight - 80) || 500;
+        canvas.width = Math.max(320, Math.floor(w * dpr));
+        canvas.height = Math.max(400, Math.floor(h * dpr));
+      }
 
       // Pause during Level-Up, Game Over, or manual Pause
       if (isLevelingUp || isGameOver || isPaused) {
@@ -1943,6 +1968,7 @@ export function TamagotchiSurvivors({
     animationId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationId);
   }, [
+    canvasReady,
     isPaused,
     isLevelingUp,
     isGameOver,
@@ -2000,7 +2026,7 @@ export function TamagotchiSurvivors({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  if (!mounted || typeof document === "undefined") {
+  if (typeof document === "undefined") {
     return null;
   }
 
@@ -2010,7 +2036,18 @@ export function TamagotchiSurvivors({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-[100dvh] max-h-[100dvh] z-[999999] flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 999999,
+        backgroundColor: "#000000",
+      }}
     >
       {/* Sleek Minimal Top HUD: Padded below iPhone 15 Pro Max Dynamic Island & notch */}
       <div
@@ -2119,12 +2156,14 @@ export function TamagotchiSurvivors({
 
       {/* Main Game Canvas Viewport */}
       <div
-        ref={containerRef}
+        ref={setContainerRef}
         className="relative flex-1 w-full bg-black overflow-hidden touch-none select-none overscroll-none"
+        style={{ flex: "1 1 0%", minHeight: "200px", width: "100%", position: "relative" }}
       >
         <canvas
-          ref={canvasRef}
+          ref={setCanvasRef}
           className="absolute inset-0 w-full h-full block z-0 touch-none select-none pointer-events-none"
+          style={{ width: "100%", height: "100%", display: "block" }}
         />
 
         {/* Bottom Center Virtual Joystick (360°) */}
