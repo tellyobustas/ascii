@@ -452,9 +452,17 @@ export function TamagotchiGenerator() {
     });
 
     setStatusMessage(
-      `Рейд завершен! Выжито ${Math.floor(result.survivedTime)}с, устранено ${result.enemiesKilled} вирусов. +${result.bytesGathered} B, +${result.expGathered} EXP.`,
+      result.extracted
+        ? `🛸 Эвакуация успешна! ${Math.floor(result.survivedTime)}с, ${result.enemiesKilled} вирусов. +${result.bytesGathered} B, +${result.expGathered} EXP (бонус эвакуации)!`
+        : `Рейд завершен! ${Math.floor(result.survivedTime)}с, ${result.enemiesKilled} вирусов. +${result.bytesGathered} B, +${result.expGathered} EXP.`,
     );
-    flashEffect(result.won ? "★ ОВЕРЛОРД ПОВЕРЖЕН ★" : "☠ РЕЙД ЗАВЕРШЕН");
+    flashEffect(
+      result.extracted
+        ? "🛸 ЭВАКУАЦИЯ УСПЕШНА!"
+        : result.won
+        ? "★ ПОБЕДА ★"
+        : "☠ РЕЙД ЗАВЕРШЕН",
+    );
   };
 
   // Колесо фортуны

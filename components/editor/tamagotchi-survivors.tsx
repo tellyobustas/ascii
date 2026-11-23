@@ -60,7 +60,6 @@ const ASCII_ENEMY_SPRITES: Record<
   {
     frames: string[][];
     color: string;
-    shadowGlow: string;
     lineH: number;
     fontSize: number;
   }
@@ -71,7 +70,6 @@ const ASCII_ENEMY_SPRITES: Record<
       [" \\o/ ", "<[O]>", " / \\ "],
     ],
     color: "#00ff88",
-    shadowGlow: "rgba(0, 255, 136, 0.4)",
     lineH: 10,
     fontSize: 9,
   },
@@ -81,7 +79,6 @@ const ASCII_ENEMY_SPRITES: Record<
       ["~{o_o}~", " (Z Z) "],
     ],
     color: "#00f0ff",
-    shadowGlow: "rgba(0, 240, 255, 0.4)",
     lineH: 11,
     fontSize: 10,
   },
@@ -91,7 +88,6 @@ const ASCII_ENEMY_SPRITES: Record<
       [" .---. ", "|(O_O)|", " \\ ~ / "],
     ],
     color: "#ffaa00",
-    shadowGlow: "rgba(255, 170, 0, 0.4)",
     lineH: 11,
     fontSize: 10,
   },
@@ -101,7 +97,6 @@ const ASCII_ENEMY_SPRITES: Record<
       [" [|▓#▓|] ", "<=<[X]=>=", "  \\TTT/  "],
     ],
     color: "#ff3366",
-    shadowGlow: "rgba(255, 51, 102, 0.5)",
     lineH: 12,
     fontSize: 10,
   },
@@ -121,7 +116,6 @@ const ASCII_ENEMY_SPRITES: Record<
       ],
     ],
     color: "#ff007f",
-    shadowGlow: "rgba(255, 0, 127, 0.8)",
     lineH: 14,
     fontSize: 12,
   },
@@ -139,7 +133,7 @@ function generateUpgradeCards(currentWeapons: ActiveWeapon[]): UpgradeCard[] {
       cards.push({
         id: `upgrade_${w.id}_${w.level + 1}`,
         title: `${def.nameRu} [УР. ${w.level + 1}]`,
-        desc: "+25% урона и радиуса",
+        desc: "+25% урона и дальности",
         glyph: def.glyph,
         type: "UPGRADE_WEAPON",
         weaponId: w.id,
@@ -206,6 +200,8 @@ export function TamagotchiSurvivors({
 }: TamagotchiSurvivorsProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const thumbElemRef = useRef<HTMLDivElement | null>(null);
+  const baseElemRef = useRef<HTMLDivElement | null>(null);
 
   // Stats calculation based on Tamagotchi power
   const skillTree = tamagotchi.skillTree ?? {};
@@ -217,7 +213,7 @@ export function TamagotchiSurvivors({
     (skillTree.MAX_HP ?? 0) * 30;
 
   const baseSpeed =
-    190 +
+    195 +
     (STAGE_SPEED_BONUS[tamagotchi.stage] ?? 0) +
     tamagotchi.level * 2 +
     (skillTree.MOVE_SPEED ?? 0) * 12;
@@ -236,7 +232,7 @@ export function TamagotchiSurvivors({
   const globalCooldownMult = 1 / (1 + (skillTree.ATK_SPEED ?? 0) * 0.08);
   const globalCritChance = 0.05 + (skillTree.CRIT_CHANCE ?? 0) * 0.05;
   const globalAreaMult = 1 + (skillTree.ATK_AREA ?? 0) * 0.1;
-  const magnetRadius = 80 + (skillTree.MAGNET_RADIUS ?? 0) * 30;
+  const magnetRadius = 85 + (skillTree.MAGNET_RADIUS ?? 0) * 30;
   const byteMultiplier = 1 + (skillTree.BYTE_HARVEST ?? 0) * 0.18;
   const hasRevive = (skillTree.SECOND_CHANCE ?? 0) > 0;
 
@@ -249,6 +245,12 @@ export function TamagotchiSurvivors({
   const [kills, setKills] = useState(0);
   const [bytesCollected, setBytesCollected] = useState(0);
 
+  // Safe Extraction state (Opens after 3:00 / 180s)
+  const [isExtractionOpen, setIsExtractionOpen] = useState(false);
+  const [extractionDist, setExtractionDist] = useState(0);
+  const [extractionArrow, setExtractionArrow] = useState("▲");
+  const [isExtracted, setIsExtracted] = useState(false);
+
   // Throttling references
   const lastReportedSecondRef = useRef(-1);
   const lastReportedHpRef = useRef(maxHp);
@@ -256,6 +258,7 @@ export function TamagotchiSurvivors({
   const lastReportedKillsRef = useRef(0);
   const lastReportedBytesRef = useRef(0);
   const lastReportedExpRef = useRef(0);
+  const lastCompassUpdateRef = useRef(0);
 
   // Level up & Game over state
   const [isLevelingUp, setIsLevelingUp] = useState(false);
@@ -263,16 +266,9 @@ export function TamagotchiSurvivors({
   const [isGameOver, setIsGameOver] = useState(false);
   const [runWon, setRunWon] = useState(false);
 
-  // Virtual Joystick & Drag Controls state
+  // Virtual Joystick & Drag Controls state (Refs avoid 120Hz React re-renders)
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
   const joystickOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isJoystickActive, setIsJoystickActive] = useState(false);
-  const [joystickThumb, setJoystickThumb] = useState<{ x: number; y: number }>({
-    x: 0,
-    y: 0,
-  });
-
-  // Keyboard input state
   const keysRef = useRef<Record<string, boolean>>({});
 
   // Game loop internal mutable references
@@ -285,11 +281,14 @@ export function TamagotchiSurvivors({
     maxHp,
     speed: baseSpeed,
     reviveUsed: false,
+    iFrameTimer: 0, // 0.45s invulnerability frames after hit
   });
 
+  // Start with strong RANGED options: Matrix Laser + Plasma Pulse + Cyber Blade
   const weaponsRef = useRef<ActiveWeapon[]>([
-    { id: "cyber_blade", level: 1, cooldownTimer: 0 },
     { id: "laser_beam", level: 1, cooldownTimer: 0 },
+    { id: "plasma_pulse", level: 1, cooldownTimer: 0 },
+    { id: "cyber_blade", level: 1, cooldownTimer: 0 },
   ]);
 
   const enemiesRef = useRef<EnemyEntity[]>([]);
@@ -306,6 +305,19 @@ export function TamagotchiSurvivors({
   const expToNextRef = useRef(25);
   const blademailTimerRef = useRef(0);
   const teslaTimerRef = useRef(1.5);
+  const satelliteShootTimerRef = useRef(2.2);
+
+  // Safe Extraction State Ref
+  const extractionRef = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+    radius: 65,
+    holdTimer: 0,
+    extracted: false,
+    beaconAngle: 0,
+  });
+
   const reflectRingsRef = useRef<
     Array<{ x: number; y: number; radius: number; maxRadius: number; life: number }>
   >([]);
@@ -349,7 +361,7 @@ export function TamagotchiSurvivors({
     };
   }, []);
 
-  // Dynamic canvas sizing to fill container crisply
+  // Dynamic canvas sizing (DPR capped at 1.5 to prevent iPhone 15 Pro Max GPU heating)
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -357,7 +369,7 @@ export function TamagotchiSurvivors({
 
     const updateSize = () => {
       const rect = container.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       const targetW = Math.max(320, Math.floor(rect.width * dpr));
       const targetH = Math.max(400, Math.floor(rect.height * dpr));
       if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -391,7 +403,7 @@ export function TamagotchiSurvivors({
     };
   }, []);
 
-  // Universal Touch / Drag Controls: Works on the joystick AND anywhere on the screen!
+  // Direct DOM Touch / Drag Controls: ZERO React re-renders on touch move!
   const updateControlVector = (
     clientX: number,
     clientY: number,
@@ -411,8 +423,14 @@ export function TamagotchiSurvivors({
       x: thumbX / maxRadius,
       y: thumbY / maxRadius,
     };
-    setJoystickThumb({ x: thumbX, y: thumbY });
-    setIsJoystickActive(true);
+
+    // Update DOM directly without setState
+    if (thumbElemRef.current) {
+      thumbElemRef.current.style.transform = `translate(${thumbX}px, ${thumbY}px)`;
+    }
+    if (baseElemRef.current) {
+      baseElemRef.current.style.borderColor = themeColors.primary;
+    }
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -444,14 +462,18 @@ export function TamagotchiSurvivors({
   const handlePointerUp = () => {
     dragOriginRef.current = null;
     joystickOffsetRef.current = { x: 0, y: 0 };
-    setJoystickThumb({ x: 0, y: 0 });
-    setIsJoystickActive(false);
+    if (thumbElemRef.current) {
+      thumbElemRef.current.style.transform = "translate(0px, 0px)";
+    }
+    if (baseElemRef.current) {
+      baseElemRef.current.style.borderColor = "rgba(255, 255, 255, 0.35)";
+    }
   };
 
   // Helper to trigger floating text
   const addFloatingText = (text: string, x: number, y: number, color = "#fff") => {
-    if (floatingTextsRef.current.length > 25) {
-      floatingTextsRef.current.splice(0, 5);
+    if (floatingTextsRef.current.length > 20) {
+      floatingTextsRef.current.splice(0, 4);
     }
     floatingTextsRef.current.push({
       id: nextEntityIdRef.current++,
@@ -459,7 +481,7 @@ export function TamagotchiSurvivors({
       x,
       y,
       color,
-      lifeTime: 0.7,
+      lifeTime: 0.65,
     });
   };
 
@@ -510,10 +532,12 @@ export function TamagotchiSurvivors({
       if (lastTimestamp === null) {
         lastTimestamp = timestamp;
       }
-      const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      const rawDelta = (timestamp - lastTimestamp) / 1000;
+      // Frame rate pacing: clamp dt to avoid huge steps or 120Hz runaway
+      const dt = Math.min(Math.max(rawDelta, 0.008), 0.05);
       lastTimestamp = timestamp;
 
-      // Handle pause during Level-Up
+      // Pause during Level-Up
       if (isLevelingUp || isGameOver) {
         animationId = requestAnimationFrame(loop);
         return;
@@ -528,6 +552,11 @@ export function TamagotchiSurvivors({
       }
 
       const player = playerRef.current;
+
+      // Decrement i-frames
+      if (player.iFrameTimer > 0) {
+        player.iFrameTimer -= dt;
+      }
 
       // 1. Calculate Movement Vector (Joystick + Keyboard)
       let moveX = joystickOffsetRef.current.x;
@@ -555,14 +584,14 @@ export function TamagotchiSurvivors({
       let berserkCooldownMult = 1.0;
       if (activeBuff === "BERSERK") {
         if (hpRatio < 0.25) {
-          berserkDamageMult = 3.5;
-          berserkCooldownMult = 0.5;
+          berserkDamageMult = 3.0;
+          berserkCooldownMult = 0.55;
         } else if (hpRatio < 0.5) {
-          berserkDamageMult = 2.0;
-          berserkCooldownMult = 0.7;
+          berserkDamageMult = 1.8;
+          berserkCooldownMult = 0.75;
         } else if (hpRatio < 0.75) {
-          berserkDamageMult = 1.35;
-          berserkCooldownMult = 0.85;
+          berserkDamageMult = 1.3;
+          berserkCooldownMult = 0.88;
         }
       }
 
@@ -592,49 +621,9 @@ export function TamagotchiSurvivors({
               (Math.random() < globalCritChance ? 2 : 1),
           );
 
-          // Execute Weapon Logic
-          if (w.id === "cyber_blade") {
-            playSound("pet", tamagotchi.soundEnabled);
-            const slashAngle = Math.atan2(player.facingY, player.facingX);
-            const slashRange = def.baseArea * globalAreaMult;
-
-            enemiesRef.current.forEach((en) => {
-              const dx = en.x - player.x;
-              const dy = en.y - player.y;
-              const dist = Math.hypot(dx, dy);
-              if (dist <= slashRange + en.radius) {
-                const enAngle = Math.atan2(dy, dx);
-                let diffAngle = Math.abs(slashAngle - enAngle);
-                if (diffAngle > Math.PI) diffAngle = Math.PI * 2 - diffAngle;
-                if (diffAngle <= Math.PI * 0.6) {
-                  en.hp -= damage;
-                  en.x += Math.cos(enAngle) * 40;
-                  en.y += Math.sin(enAngle) * 40;
-                  addFloatingText(
-                    `-${damage}`,
-                    en.x,
-                    en.y - 12,
-                    damage > def.baseDamage * 1.5 ? "#ff007f" : "#00ff66",
-                  );
-                }
-              }
-            });
-
-            projectilesRef.current.push({
-              id: nextEntityIdRef.current++,
-              weaponId: "cyber_blade",
-              x: player.x,
-              y: player.y,
-              vx: player.facingX,
-              vy: player.facingY,
-              damage,
-              radius: slashRange,
-              lifeTime: 0.18,
-              pierce: 999,
-            });
-          } else if (w.id === "laser_beam") {
+          if (w.id === "laser_beam") {
             let closestEn: EnemyEntity | null = null;
-            let closestDist = 550;
+            let closestDist = 580;
             enemiesRef.current.forEach((en) => {
               const d = Math.hypot(en.x - player.x, en.y - player.y);
               if (d < closestDist) {
@@ -655,12 +644,70 @@ export function TamagotchiSurvivors({
                 vx: Math.cos(angle) * def.baseSpeed,
                 vy: Math.sin(angle) * def.baseSpeed,
                 damage,
-                radius: 7 * globalAreaMult,
+                radius: 8 * globalAreaMult,
                 lifeTime: 0.9,
-                pierce: 2 + Math.floor(w.level / 2),
+                pierce: 3 + Math.floor(w.level / 2),
+                glyph: "──►",
+                color: "#00ff88",
               });
               playSound("click", tamagotchi.soundEnabled);
             }
+          } else if (w.id === "plasma_pulse") {
+            // Rapid plasma burst in facing direction
+            projectilesRef.current.push({
+              id: nextEntityIdRef.current++,
+              weaponId: "plasma_pulse",
+              x: player.x,
+              y: player.y,
+              vx: player.facingX * def.baseSpeed,
+              vy: player.facingY * def.baseSpeed,
+              damage,
+              radius: 12,
+              lifeTime: 0.85,
+              pierce: 1 + Math.floor(w.level / 2),
+              glyph: "[=>>]",
+              color: "#00f0ff",
+            });
+            playSound("click", tamagotchi.soundEnabled);
+          } else if (w.id === "cyber_blade") {
+            playSound("pet", tamagotchi.soundEnabled);
+            const slashAngle = Math.atan2(player.facingY, player.facingX);
+            const slashRange = def.baseArea * globalAreaMult;
+
+            enemiesRef.current.forEach((en) => {
+              const dx = en.x - player.x;
+              const dy = en.y - player.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist <= slashRange + en.radius) {
+                const enAngle = Math.atan2(dy, dx);
+                let diffAngle = Math.abs(slashAngle - enAngle);
+                if (diffAngle > Math.PI) diffAngle = Math.PI * 2 - diffAngle;
+                if (diffAngle <= Math.PI * 0.6) {
+                  en.hp -= damage;
+                  en.x += Math.cos(enAngle) * 35;
+                  en.y += Math.sin(enAngle) * 35;
+                  addFloatingText(
+                    `-${damage}`,
+                    en.x,
+                    en.y - 12,
+                    damage > def.baseDamage * 1.5 ? "#ff007f" : "#00ff66",
+                  );
+                }
+              }
+            });
+
+            projectilesRef.current.push({
+              id: nextEntityIdRef.current++,
+              weaponId: "cyber_blade",
+              x: player.x,
+              y: player.y,
+              vx: player.facingX,
+              vy: player.facingY,
+              damage,
+              radius: slashRange,
+              lifeTime: 0.16,
+              pierce: 999,
+            });
           } else if (w.id === "glitch_darts") {
             const count = def.baseCount + Math.floor(w.level / 2);
             for (let i = 0; i < count; i++) {
@@ -676,34 +723,51 @@ export function TamagotchiSurvivors({
                 vy: Math.sin(spreadAngle) * def.baseSpeed,
                 damage,
                 radius: 6,
-                lifeTime: 1.4,
+                lifeTime: 1.3,
                 pierce: 1,
+                glyph: "♦",
+                color: "#ffaa00",
               });
             }
-          } else if (w.id === "shockwave") {
-            const shockRadius = def.baseArea * globalAreaMult;
-            enemiesRef.current.forEach((en) => {
-              const d = Math.hypot(en.x - player.x, en.y - player.y);
-              if (d <= shockRadius) {
-                en.hp -= damage;
-                addFloatingText(`-${damage}`, en.x, en.y - 10, "#00f0ff");
-              }
-            });
-            projectilesRef.current.push({
-              id: nextEntityIdRef.current++,
-              weaponId: "shockwave",
-              x: player.x,
-              y: player.y,
-              vx: 0,
-              vy: 0,
-              damage,
-              radius: shockRadius,
-              lifeTime: 0.25,
-              pierce: 999,
-            });
           }
         }
       });
+
+      // 3. Orbiting ASCII Satellites System (Scales with player effort & level)
+      const satCount = Math.min(
+        6,
+        2 + Math.floor(levelRef.current / 3) +
+          (weaponsRef.current.find((w) => w.id === "orbit_shards")?.level ?? 0),
+      );
+      const orbitSpeed = runSecondsRef.current * 3.5;
+      const orbitRadius = 48 + Math.min(22, levelRef.current * 2);
+
+      // Satellite periodic burst fire at distant enemies
+      satelliteShootTimerRef.current -= dt;
+      if (satelliteShootTimerRef.current <= 0) {
+        satelliteShootTimerRef.current = 2.4;
+        let target = enemiesRef.current.find(
+          (e) => Math.hypot(e.x - player.x, e.y - player.y) < 460,
+        );
+        if (target) {
+          const ang = Math.atan2(target.y - player.y, target.x - player.x);
+          projectilesRef.current.push({
+            id: nextEntityIdRef.current++,
+            weaponId: "satellite_dart",
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(ang) * 450,
+            vy: Math.sin(ang) * 450,
+            damage: Math.round(22 * globalDamageMult),
+            radius: 6,
+            lifeTime: 1.0,
+            pierce: 1,
+            glyph: "►",
+            color: "#00f0ff",
+          });
+          playSound("click", tamagotchi.soundEnabled);
+        }
+      }
 
       // Tesla Coil Discharge
       if (activeBuff === "TESLA") {
@@ -711,7 +775,7 @@ export function TamagotchiSurvivors({
         if (teslaTimerRef.current <= 0) {
           teslaTimerRef.current = 3.2;
           const candidates = enemiesRef.current
-            .filter((en) => Math.hypot(en.x - player.x, en.y - player.y) <= 380)
+            .filter((en) => Math.hypot(en.x - player.x, en.y - player.y) <= 360)
             .sort(
               (a, b) =>
                 Math.hypot(a.x - player.x, a.y - player.y) -
@@ -728,7 +792,7 @@ export function TamagotchiSurvivors({
               y1: player.y,
               x2: en.x,
               y2: en.y,
-              life: 0.18,
+              life: 0.16,
             });
           });
 
@@ -750,64 +814,126 @@ export function TamagotchiSurvivors({
       });
       lightningBoltsRef.current = lightningBoltsRef.current.filter((b) => b.life > 0);
 
-      // Update Projectiles
+      // Update Projectiles (Player + Enemy)
       projectilesRef.current.forEach((proj) => {
         proj.lifeTime -= dt;
         proj.x += proj.vx * dt;
         proj.y += proj.vy * dt;
 
-        if (proj.pierce > 0 && proj.weaponId !== "cyber_blade" && proj.weaponId !== "shockwave") {
-          enemiesRef.current.forEach((en) => {
-            const d = Math.hypot(en.x - proj.x, en.y - proj.y);
-            if (d < en.radius + proj.radius && proj.pierce > 0) {
-              en.hp -= proj.damage;
-              proj.pierce -= 1;
-              addFloatingText(`-${proj.damage}`, en.x, en.y - 12, "#00ff66");
-            }
-          });
+        if (proj.isEnemy) {
+          // Enemy projectile hitting player (respects i-frames!)
+          const d = Math.hypot(proj.x - player.x, proj.y - player.y);
+          if (d < proj.radius + 14 && player.iFrameTimer <= 0) {
+            player.hp -= proj.damage;
+            player.iFrameTimer = 0.45;
+            proj.pierce = 0;
+            triggerHaptic("medium");
+            playSound("pet", tamagotchi.soundEnabled);
+            addFloatingText(`-${proj.damage}`, player.x, player.y - 14, "#ff2244");
+          }
+        } else {
+          // Player projectile hitting enemies
+          if (proj.pierce > 0 && proj.weaponId !== "cyber_blade" && proj.weaponId !== "shockwave") {
+            enemiesRef.current.forEach((en) => {
+              const d = Math.hypot(en.x - proj.x, en.y - proj.y);
+              if (d < en.radius + proj.radius && proj.pierce > 0) {
+                en.hp -= proj.damage;
+                proj.pierce -= 1;
+                addFloatingText(`-${proj.damage}`, en.x, en.y - 12, "#00ff66");
+              }
+            });
+          }
         }
       });
       projectilesRef.current = projectilesRef.current.filter(
         (p) => p.lifeTime > 0 && p.pierce > 0,
       );
 
-      // 3. Enemy Spawning Wave Engine (Escalating tactical waves)
+      // 4. Safe Extraction Logic (Activates at 3:00 / 180s)
+      const ex = extractionRef.current;
+      if (runSecondsRef.current >= 180 && !ex.active && !ex.extracted) {
+        ex.active = true;
+        const exAngle = Math.random() * Math.PI * 2;
+        ex.x = player.x + Math.cos(exAngle) * 560;
+        ex.y = player.y + Math.sin(exAngle) * 560;
+        setIsExtractionOpen(true);
+        playSound("combo", tamagotchi.soundEnabled);
+        triggerHaptic("heavy");
+        addFloatingText("🚨 ЭВАКУАЦИЯ ОТКРЫТА! 🚨", player.x, player.y - 40, "#00f0ff");
+      }
+
+      if (ex.active && !ex.extracted) {
+        const dToEx = Math.hypot(ex.x - player.x, ex.y - player.y);
+        ex.beaconAngle = Math.atan2(ex.y - player.y, ex.x - player.x);
+
+        // Update compass direction icon for HUD (throttled to 250ms)
+        if (timestamp - lastCompassUpdateRef.current > 250) {
+          lastCompassUpdateRef.current = timestamp;
+          setExtractionDist(Math.round(dToEx));
+          const deg = (ex.beaconAngle * 180) / Math.PI;
+          if (deg >= -22.5 && deg < 22.5) setExtractionArrow("►");
+          else if (deg >= 22.5 && deg < 67.5) setExtractionArrow("◢");
+          else if (deg >= 67.5 && deg < 112.5) setExtractionArrow("▼");
+          else if (deg >= 112.5 && deg < 157.5) setExtractionArrow("◣");
+          else if (deg >= -67.5 && deg < -22.5) setExtractionArrow("◥");
+          else if (deg >= -112.5 && deg < -67.5) setExtractionArrow("▲");
+          else if (deg >= -157.5 && deg < -112.5) setExtractionArrow("◤");
+          else setExtractionArrow("◄");
+        }
+
+        // Zone hold check
+        if (dToEx <= ex.radius) {
+          ex.holdTimer += dt;
+          if (ex.holdTimer >= 3.0) {
+            ex.extracted = true;
+            setIsExtracted(true);
+            setIsGameOver(true);
+            setRunWon(true);
+            playSound("gameWin", tamagotchi.soundEnabled);
+            triggerHaptic("success");
+          }
+        } else {
+          ex.holdTimer = Math.max(0, ex.holdTimer - dt * 0.5);
+        }
+      }
+
+      // 5. Enemy Spawning Wave Engine (Capped at 40 enemies max)
       spawnTimerRef.current -= dt;
-      if (spawnTimerRef.current <= 0) {
+      if (spawnTimerRef.current <= 0 && enemiesRef.current.length < 40) {
         const timeSec = runSecondsRef.current;
-        const spawnDelay = Math.max(0.18, 0.85 - timeSec * 0.0035);
+        const spawnDelay = Math.max(0.22, 0.85 - timeSec * 0.0035);
         spawnTimerRef.current = spawnDelay;
 
         const spawnAngle = Math.random() * Math.PI * 2;
-        const spawnDist = 720 + Math.random() * 160;
-        const ex = player.x + Math.cos(spawnAngle) * spawnDist;
+        const spawnDist = 720 + Math.random() * 150;
+        const exX = player.x + Math.cos(spawnAngle) * spawnDist;
         const ey = player.y + Math.sin(spawnAngle) * spawnDist;
 
         let type: EnemyEntity["type"] = "BUG";
-        let hp = 32 + Math.floor(timeSec * 0.7);
-        let speed = 95 + Math.random() * 25;
+        let hp = 35 + Math.floor(timeSec * 0.7);
+        let speed = 90 + Math.random() * 20;
         let glyph = "[BUG]";
         let radius = 14;
         let color = "#00ff88";
 
         if (timeSec > 120 && Math.random() < 0.25) {
           type = "SKULL";
-          hp = 120 + Math.floor(timeSec * 1.4);
-          speed = 80;
+          hp = 110 + Math.floor(timeSec * 1.3);
+          speed = 75;
           glyph = "☠SKULL";
           radius = 18;
           color = "#ffaa00";
-        } else if (timeSec > 90 && Math.random() < 0.22) {
+        } else if (timeSec > 75 && Math.random() < 0.22) {
           type = "TANK";
-          hp = 220 + Math.floor(timeSec * 1.8);
-          speed = 65;
+          hp = 200 + Math.floor(timeSec * 1.6);
+          speed = 60;
           glyph = "[#▓#]";
           radius = 24;
           color = "#ff3366";
-        } else if (timeSec > 45 && Math.random() < 0.35) {
+        } else if (timeSec > 40 && Math.random() < 0.35) {
           type = "WORM";
-          hp = 55 + Math.floor(timeSec * 0.9);
-          speed = 125;
+          hp = 50 + Math.floor(timeSec * 0.85);
+          speed = 120;
           glyph = "~WORM~";
           radius = 16;
           color = "#00f0ff";
@@ -816,8 +942,8 @@ export function TamagotchiSurvivors({
         // Mini-boss at 2 minutes
         if (Math.floor(timeSec) === 120 && !enemiesRef.current.some((e) => e.isBoss)) {
           type = "BOSS";
-          hp = 1500;
-          speed = 68;
+          hp = 1400;
+          speed = 65;
           glyph = "⚡MEGA-DAEMON⚡";
           radius = 36;
           color = "#ff007f";
@@ -828,12 +954,12 @@ export function TamagotchiSurvivors({
         enemiesRef.current.push({
           id: nextEntityIdRef.current++,
           type,
-          x: ex,
+          x: exX,
           y: ey,
           hp,
           maxHp: hp,
           speed,
-          damage: type === "BOSS" ? 28 : type === "TANK" ? 18 : 12,
+          damage: type === "BOSS" ? 28 : type === "TANK" ? 18 : 11,
           radius,
           glyph,
           color,
@@ -841,29 +967,118 @@ export function TamagotchiSurvivors({
         });
       }
 
-      // 4. Update Enemies & Check Collisions
+      // 6. Update Enemies & Telegraphed Attacks
       enemiesRef.current.forEach((en) => {
         const dx = player.x - en.x;
         const dy = player.y - en.y;
         const dist = Math.hypot(dx, dy);
 
+        // Skull Charge Logic
+        if (en.type === "SKULL") {
+          en.chargeTimer = (en.chargeTimer ?? 2.8) - dt;
+          if (en.chargeTimer <= 0.5 && !en.isCharging) {
+            en.isCharging = true;
+            en.color = "#ff3300";
+          }
+          if (en.chargeTimer <= 0) {
+            en.chargeTimer = 3.2;
+            en.isCharging = false;
+            en.color = "#ffaa00";
+            if (dist > 10) {
+              en.x += (dx / dist) * 65;
+              en.y += (dy / dist) * 65;
+            }
+          }
+        }
+
+        // Tank Ranged Shoot Logic
+        if (en.type === "TANK") {
+          en.shootTimer = (en.shootTimer ?? 2.8) - dt;
+          if (en.shootTimer <= 0 && dist < 520) {
+            en.shootTimer = 2.8;
+            const shootAng = Math.atan2(dy, dx);
+            projectilesRef.current.push({
+              id: nextEntityIdRef.current++,
+              weaponId: "enemy_tank_bullet",
+              x: en.x,
+              y: en.y,
+              vx: Math.cos(shootAng) * 180,
+              vy: Math.sin(shootAng) * 180,
+              damage: 16,
+              radius: 8,
+              lifeTime: 3.2,
+              pierce: 1,
+              isEnemy: true,
+              glyph: "[#]",
+              color: "#ff3366",
+            });
+          }
+        }
+
+        // Boss Radial Bursts
+        if (en.isBoss) {
+          en.shootTimer = (en.shootTimer ?? 3.5) - dt;
+          if (en.shootTimer <= 0) {
+            en.shootTimer = 3.5;
+            for (let s = 0; s < 6; s++) {
+              const bAng = (s * Math.PI * 2) / 6;
+              projectilesRef.current.push({
+                id: nextEntityIdRef.current++,
+                weaponId: "enemy_boss_bullet",
+                x: en.x,
+                y: en.y,
+                vx: Math.cos(bAng) * 160,
+                vy: Math.sin(bAng) * 160,
+                damage: 20,
+                radius: 10,
+                lifeTime: 3.8,
+                pierce: 1,
+                isEnemy: true,
+                glyph: "[X]",
+                color: "#ff007f",
+              });
+            }
+          }
+        }
+
+        // Movement
         if (dist > 2200) {
           en.x = player.x + (dx / dist) * 750;
           en.y = player.y + (dy / dist) * 750;
         } else if (dist > 2) {
-          en.x += (dx / dist) * en.speed * dt;
-          en.y += (dy / dist) * en.speed * dt;
+          const spd = en.isCharging ? en.speed * 1.7 : en.speed;
+          en.x += (dx / dist) * spd * dt;
+          en.y += (dy / dist) * spd * dt;
         }
 
-        if (dist < en.radius + 18) {
+        // Orbiting Satellites contact check with this enemy
+        for (let s = 0; s < satCount; s++) {
+          const satAngle = orbitSpeed + (s * Math.PI * 2) / satCount;
+          const sx = player.x + Math.cos(satAngle) * orbitRadius;
+          const sy = player.y + Math.sin(satAngle) * (orbitRadius * 0.72);
+          if (Math.hypot(en.x - sx, en.y - sy) < en.radius + 12) {
+            const satDmg = Math.round(24 * globalDamageMult);
+            en.hp -= satDmg * dt * 4;
+            en.x += (dx / (dist || 1)) * -18 * dt;
+            en.y += (dy / (dist || 1)) * -18 * dt;
+          }
+        }
+
+        // Contact Attack Player (protected by i-frames!)
+        if (dist < en.radius + 16 && player.iFrameTimer <= 0) {
           const dmgFactor = activeBuff === "QUANTUM_RISK" ? 1.4 : 1.0;
-          player.hp -= en.damage * dt * 2.2 * dmgFactor;
+          const hitDamage = Math.round(en.damage * dmgFactor);
+          player.hp -= hitDamage;
+          player.iFrameTimer = 0.45; // 0.45s invulnerability frames
+          triggerHaptic("medium");
+          playSound("pet", tamagotchi.soundEnabled);
+          addFloatingText(`-${hitDamage}`, player.x, player.y - 14, "#ff2244");
 
           // Blademail reflection
           if (activeBuff === "BLADEMAIL") {
             blademailTimerRef.current -= dt;
             if (blademailTimerRef.current <= 0) {
-              blademailTimerRef.current = 0.16;
+              blademailTimerRef.current = 0.2;
               const reflectDmg = Math.max(
                 35,
                 Math.round(en.damage * 3.5 * globalDamageMult),
@@ -874,12 +1089,7 @@ export function TamagotchiSurvivors({
                   nearby.hp -= reflectDmg;
                   nearby.x += ((nearby.x - player.x) / (nd || 1)) * 32;
                   nearby.y += ((nearby.y - player.y) / (nd || 1)) * 32;
-                  addFloatingText(
-                    `⚡${reflectDmg}`,
-                    nearby.x,
-                    nearby.y - 12,
-                    "#ff0055",
-                  );
+                  addFloatingText(`⚡${reflectDmg}`, nearby.x, nearby.y - 12, "#ff0055");
                 }
               });
               reflectRingsRef.current.push({
@@ -914,51 +1124,52 @@ export function TamagotchiSurvivors({
         }
       });
 
-      // Handle Enemy Deaths & Drop Spawns
+      // Handle Enemy Deaths & Drop Spawns (Capped drops to 35 max)
       const aliveEnemies: EnemyEntity[] = [];
       enemiesRef.current.forEach((en) => {
         if (en.hp <= 0) {
           killsRef.current += 1;
 
+          // Vampirism (Balanced: +1 bug, +5 tank, +30 boss)
           if (activeBuff === "VAMPIRISM") {
-            const drainAmount = en.isBoss ? 120 : en.type === "TANK" ? 18 : 3;
-            player.hp = Math.min(player.maxHp, player.hp + drainAmount);
-            addFloatingText(
-              `+${drainAmount} HP`,
-              player.x,
-              player.y - 18,
-              "#00ff66",
-            );
+            const drain = en.isBoss ? 30 : en.type === "TANK" ? 5 : 1;
+            player.hp = Math.min(player.maxHp, player.hp + drain);
+            addFloatingText(`+${drain} HP`, player.x, player.y - 18, "#00ff66");
           }
 
+          // Smart Medkit drop rate (more when hurt)
+          const hurtFactor = player.hp < player.maxHp * 0.35 ? 0.16 : 0.05;
           const dropRoll = Math.random();
-          if (dropRoll < 0.12) {
-            dropsRef.current.push({
-              id: nextEntityIdRef.current++,
-              type: "MEDKIT",
-              x: en.x,
-              y: en.y,
-              value: medkitHealAmount,
-              radius: 14,
-            });
-          } else if (dropRoll < 0.32) {
-            dropsRef.current.push({
-              id: nextEntityIdRef.current++,
-              type: "COIN",
-              x: en.x,
-              y: en.y,
-              value: Math.round((en.isBoss ? 35 : 4) * byteMultiplier),
-              radius: 12,
-            });
-          } else {
-            dropsRef.current.push({
-              id: nextEntityIdRef.current++,
-              type: "EXP",
-              x: en.x,
-              y: en.y,
-              value: en.isBoss ? 60 : 9,
-              radius: 10,
-            });
+
+          if (dropsRef.current.length < 35) {
+            if (dropRoll < hurtFactor) {
+              dropsRef.current.push({
+                id: nextEntityIdRef.current++,
+                type: "MEDKIT",
+                x: en.x,
+                y: en.y,
+                value: medkitHealAmount,
+                radius: 14,
+              });
+            } else if (dropRoll < 0.32) {
+              dropsRef.current.push({
+                id: nextEntityIdRef.current++,
+                type: "COIN",
+                x: en.x,
+                y: en.y,
+                value: Math.round((en.isBoss ? 35 : 4) * byteMultiplier),
+                radius: 12,
+              });
+            } else {
+              dropsRef.current.push({
+                id: nextEntityIdRef.current++,
+                type: "EXP",
+                x: en.x,
+                y: en.y,
+                value: en.isBoss ? 60 : 9,
+                radius: 10,
+              });
+            }
           }
 
           if (en.isBoss) {
@@ -972,7 +1183,7 @@ export function TamagotchiSurvivors({
       });
       enemiesRef.current = aliveEnemies;
 
-      // 5. Update Drops & Magnet Attraction
+      // 7. Update Drops & Magnet Attraction
       const remainingDrops: DropEntity[] = [];
       dropsRef.current.forEach((drop) => {
         const d = Math.hypot(player.x - drop.x, player.y - drop.y);
@@ -1014,7 +1225,7 @@ export function TamagotchiSurvivors({
       });
       dropsRef.current = remainingDrops;
 
-      // Batch throttle React state updates to avoid FPS drops
+      // Batch throttle React state updates (120ms)
       const roundedHp = Math.max(0, Math.round(player.hp));
       if (
         roundedHp !== lastReportedHpRef.current &&
@@ -1050,12 +1261,11 @@ export function TamagotchiSurvivors({
       );
 
       // ==========================================
-      // RENDER SECTION (Zoomed Out Camera & ASCII Graphics)
+      // RENDER SECTION (Zero shadowBlur = Ice Cold Performance!)
       // ==========================================
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Camera Zoom Out: ZOOM ~0.58 expands battlefield by 1.72x
       const ZOOM = 0.58 * dpr;
 
       ctx.save();
@@ -1063,7 +1273,7 @@ export function TamagotchiSurvivors({
       ctx.scale(ZOOM, ZOOM);
       ctx.translate(-player.x, -player.y);
 
-      // Draw Grid Matrix Background across expanded visible viewport
+      // Single-batch Grid Matrix Background (Fast!)
       ctx.strokeStyle = "rgba(0, 255, 102, 0.08)";
       ctx.lineWidth = 1;
       const gridSize = 60;
@@ -1074,55 +1284,98 @@ export function TamagotchiSurvivors({
       const startY = Math.floor((player.y - visibleHalfH) / gridSize) * gridSize;
       const endY = player.y + visibleHalfH;
 
+      ctx.beginPath();
       for (let x = startX; x <= endX; x += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(x, startY);
         ctx.lineTo(x, endY);
-        ctx.stroke();
       }
       for (let y = startY; y <= endY; y += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(startX, y);
         ctx.lineTo(endX, y);
+      }
+      ctx.stroke();
+
+      // Draw Extraction Beacon & Directional Chevrons if Open
+      if (ex.active && !ex.extracted) {
+        const dToEx = Math.hypot(ex.x - player.x, ex.y - player.y);
+
+        // Ground Conduit Chevrons Trail towards extraction point
+        const steps = Math.min(10, Math.floor(dToEx / 60));
+        ctx.fillStyle = "rgba(0, 240, 255, 0.45)";
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let st = 1; st <= steps; st++) {
+          const frac = st / (steps + 1);
+          const tx = player.x + (ex.x - player.x) * frac;
+          const ty = player.y + (ex.y - player.y) * frac;
+          ctx.fillText(">>>", tx, ty);
+        }
+
+        // Orbiting Pointer Arrow around player pointing directly to beacon
+        const arrowX = player.x + Math.cos(ex.beaconAngle) * 44;
+        const arrowY = player.y + Math.sin(ex.beaconAngle) * 44;
+        ctx.fillStyle = "#00f0ff";
+        ctx.font = "bold 11px monospace";
+        ctx.fillText("──►", arrowX, arrowY);
+
+        // Pulsing circular extraction zone on ground
+        const pulseR = ex.radius + Math.sin(runSecondsRef.current * 5) * 4;
+        ctx.strokeStyle = "#00f0ff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ex.x, ex.y, pulseR, 0, Math.PI * 2);
         ctx.stroke();
+
+        // ASCII Extraction Portal Graphic
+        ctx.font = "bold 10px monospace";
+        ctx.fillStyle = "#00f0ff";
+        ctx.fillText(".--[ 🛸 ]--.", ex.x, ex.y - 20);
+        ctx.fillText("|  ЭВАКУАЦИЯ  |", ex.x, ex.y - 8);
+        ctx.fillText("'-----------'", ex.x, ex.y + 4);
+
+        if (ex.holdTimer > 0) {
+          const pct = Math.min(1, ex.holdTimer / 3.0);
+          const barBlocks = 8;
+          const fill = Math.round(pct * barBlocks);
+          const asciiHold = "█".repeat(fill) + "░".repeat(barBlocks - fill);
+          ctx.fillStyle = "#00ff88";
+          ctx.font = "bold 10px monospace";
+          ctx.fillText(`[${asciiHold}] ${Math.round(pct * 100)}%`, ex.x, ex.y + 22);
+        } else {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+          ctx.font = "bold 9px monospace";
+          ctx.fillText("УДЕРЖИВАЙ 3 СЕК", ex.x, ex.y + 20);
+        }
       }
 
       // Draw ASCII Drops
       dropsRef.current.forEach((drop) => {
         if (drop.type === "EXP") {
           ctx.fillStyle = "#00f0ff";
-          ctx.shadowColor = "rgba(0, 240, 255, 0.6)";
-          ctx.shadowBlur = 6;
           ctx.font = "bold 13px monospace";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("◆", drop.x, drop.y);
-          ctx.shadowBlur = 0;
         } else if (drop.type === "MEDKIT") {
           ctx.fillStyle = "#ff0055";
-          ctx.shadowColor = "rgba(255, 0, 85, 0.6)";
-          ctx.shadowBlur = 8;
           ctx.font = "bold 12px monospace";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("[✚]", drop.x, drop.y);
-          ctx.shadowBlur = 0;
         } else if (drop.type === "COIN") {
           ctx.fillStyle = "#ffdd00";
-          ctx.shadowColor = "rgba(255, 221, 0, 0.6)";
-          ctx.shadowBlur = 8;
           ctx.font = "bold 12px monospace";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("[$]", drop.x, drop.y);
-          ctx.shadowBlur = 0;
         }
       });
 
       // Draw Projectiles
       projectilesRef.current.forEach((p) => {
         if (p.weaponId === "laser_beam") {
-          ctx.strokeStyle = "#00ff66";
+          ctx.strokeStyle = p.color ?? "#00ff88";
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
@@ -1140,18 +1393,12 @@ export function TamagotchiSurvivors({
             Math.atan2(p.vy, p.vx) + Math.PI * 0.45,
           );
           ctx.stroke();
-        } else if (p.weaponId === "shockwave") {
-          ctx.strokeStyle = "rgba(0, 240, 255, 0.7)";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.stroke();
         } else {
-          ctx.fillStyle = "#ff007f";
-          ctx.font = "bold 12px monospace";
+          ctx.fillStyle = p.color ?? "#ff007f";
+          ctx.font = "bold 11px monospace";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText("►", p.x, p.y);
+          ctx.fillText(p.glyph ?? "►", p.x, p.y);
         }
       });
 
@@ -1161,21 +1408,17 @@ export function TamagotchiSurvivors({
         const frameIdx = Math.floor(runSecondsRef.current * 4) % enemyDef.frames.length;
         const lines = enemyDef.frames[frameIdx];
 
-        ctx.save();
         ctx.font = `bold ${enemyDef.fontSize}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = enemyDef.color;
-        ctx.shadowColor = enemyDef.shadowGlow;
-        ctx.shadowBlur = en.isBoss ? 16 : 8;
+        ctx.fillStyle = en.color;
 
         const startLineY = en.y - ((lines.length - 1) * enemyDef.lineH) / 2;
         lines.forEach((line, idx) => {
           ctx.fillText(line, en.x, startLineY + idx * enemyDef.lineH);
         });
-        ctx.restore();
 
-        // Health bar above enemy when damaged
+        // Health bar above damaged enemy
         if (en.hp < en.maxHp) {
           const barW = en.isBoss ? 56 : 28;
           const barH = en.isBoss ? 4.5 : 3;
@@ -1206,151 +1449,133 @@ export function TamagotchiSurvivors({
         }
       });
 
-      // Draw Player Hero (Exact User Tamagotchi in ASCII!)
-      let combatMood: PetMood = "NORMAL";
-      if (player.hp <= player.maxHp * 0.25) {
-        combatMood = "PANIC";
-      } else if (player.hp <= player.maxHp * 0.5) {
-        combatMood = "SICK";
-      } else if (tamagotchi.hp >= 70 && tamagotchi.happiness >= 70) {
-        combatMood = "ECSTATIC";
-      } else {
-        combatMood = "HAPPY";
-      }
+      // Draw Player Hero (Blinks during i-frames!)
+      const isBlinking = player.iFrameTimer > 0 && Math.floor(player.iFrameTimer * 16) % 2 === 0;
 
-      const petLines = getPetSprite(
-        tamagotchi.stage,
-        combatMood,
-        tamagotchi.eggWarmCycles ?? 0,
-      );
-
-      const accessories = getAccessoryOverlay(
-        tamagotchi.headAccessory ?? "NONE",
-        tamagotchi.droneAccessory ?? "NONE",
-      );
-
-      const isComplexStage =
-        tamagotchi.stage === "OMEGA_DEITY" ||
-        tamagotchi.stage === "NEO_OVERLORD" ||
-        tamagotchi.stage === "CYBER_ARMOR";
-      const petFontSize = isComplexStage ? 9.5 : 11;
-      const petLineHeight = petFontSize + 2.5;
-
-      const isMoving =
-        moveLen > 0.05 ||
-        keys["w"] ||
-        keys["a"] ||
-        keys["s"] ||
-        keys["d"] ||
-        keys["arrowup"] ||
-        keys["arrowdown"] ||
-        keys["arrowleft"] ||
-        keys["arrowright"];
-      const walkBob = isMoving
-        ? Math.sin(runSecondsRef.current * 14) * 2.5
-        : Math.sin(runSecondsRef.current * 3) * 0.8;
-
-      const petStartY =
-        player.y - ((petLines.length - 1) * petLineHeight) / 2 + walkBob;
-
-      ctx.save();
-      ctx.font = `bold ${petFontSize}px monospace`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = themeColors.primary;
-      ctx.shadowColor = themeColors.glow;
-      ctx.shadowBlur = 12;
-
-      petLines.forEach((line, idx) => {
-        ctx.fillText(line, player.x, petStartY + idx * petLineHeight);
-      });
-
-      // Head Accessory
-      if (accessories.headGlyph) {
-        ctx.fillStyle = "#00f0ff";
-        ctx.shadowColor = "rgba(0, 240, 255, 0.7)";
-        ctx.shadowBlur = 8;
-        ctx.font = "bold 9px monospace";
-        ctx.fillText(accessories.headGlyph, player.x, petStartY - 12);
-      }
-
-      // Drone Companion Accessory (orbiting)
-      if (accessories.droneGlyph) {
-        const droneAngle = runSecondsRef.current * 2.6;
-        const droneDist = 44;
-        const dx = player.x + Math.cos(droneAngle) * droneDist;
-        const dy = player.y + Math.sin(droneAngle) * (droneDist * 0.65);
-        ctx.fillStyle = "#ffcc00";
-        ctx.shadowColor = "rgba(255, 204, 0, 0.7)";
-        ctx.shadowBlur = 8;
-        ctx.font = "bold 9px monospace";
-        ctx.fillText(accessories.droneGlyph, dx, dy);
-      }
-
-      // Directional Facing Spark
-      ctx.fillStyle = "#ffffff";
-      ctx.shadowBlur = 6;
-      ctx.shadowColor = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(
-        player.x + player.facingX * 22,
-        player.y + player.facingY * 22 + walkBob,
-        3,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.restore();
-
-      // Sleek Floating ASCII Health Bar above Player (uncluttered)
-      const currentHpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
-      const hpColor =
-        currentHpRatio < 0.25 ? "#ff2244" : currentHpRatio < 0.5 ? "#ffaa00" : "#00ff66";
-      const hpTextY = petStartY - (accessories.headGlyph ? 18 : 12);
-
-      const totalBlocks = 8;
-      const filledBlocks = Math.round(currentHpRatio * totalBlocks);
-      const emptyBlocks = totalBlocks - filledBlocks;
-      const asciiHp = "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
-
-      ctx.save();
-      ctx.font = "bold 10px monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = hpColor;
-      ctx.shadowColor = hpColor;
-      ctx.shadowBlur = 6;
-      ctx.fillText(`[${asciiHp}] ${Math.round(player.hp)}`, player.x, hpTextY);
-      ctx.restore();
-
-      // Draw Orbiting Blades if weapon is active
-      const orbitWep = weaponsRef.current.find((w) => w.id === "orbit_shards");
-      if (orbitWep) {
-        const bladeCount = 2 + Math.floor(orbitWep.level / 2);
-        const orbitRadius = 45;
-        const orbitSpeed = runSecondsRef.current * 4.5;
-        for (let b = 0; b < bladeCount; b++) {
-          const angle = orbitSpeed + (b * Math.PI * 2) / bladeCount;
-          const bx = player.x + Math.cos(angle) * orbitRadius;
-          const by = player.y + Math.sin(angle) * orbitRadius;
-
-          ctx.fillStyle = "#00ff66";
-          ctx.font = "bold 11px monospace";
-          ctx.fillText("◆", bx, by);
-
-          enemiesRef.current.forEach((en) => {
-            if (Math.hypot(en.x - bx, en.y - by) < en.radius + 8) {
-              en.hp -= 18 * dt * 4;
-            }
-          });
+      if (!isBlinking) {
+        let combatMood: PetMood = "NORMAL";
+        if (player.hp <= player.maxHp * 0.25) {
+          combatMood = "PANIC";
+        } else if (player.hp <= player.maxHp * 0.5) {
+          combatMood = "SICK";
+        } else if (tamagotchi.hp >= 70 && tamagotchi.happiness >= 70) {
+          combatMood = "ECSTATIC";
+        } else {
+          combatMood = "HAPPY";
         }
+
+        const petLines = getPetSprite(
+          tamagotchi.stage,
+          combatMood,
+          tamagotchi.eggWarmCycles ?? 0,
+        );
+
+        const accessories = getAccessoryOverlay(
+          tamagotchi.headAccessory ?? "NONE",
+          tamagotchi.droneAccessory ?? "NONE",
+        );
+
+        const isComplexStage =
+          tamagotchi.stage === "OMEGA_DEITY" ||
+          tamagotchi.stage === "NEO_OVERLORD" ||
+          tamagotchi.stage === "CYBER_ARMOR";
+        const petFontSize = isComplexStage ? 9.5 : 11;
+        const petLineHeight = petFontSize + 2.5;
+
+        const isMoving =
+          moveLen > 0.05 ||
+          keys["w"] ||
+          keys["a"] ||
+          keys["s"] ||
+          keys["d"] ||
+          keys["arrowup"] ||
+          keys["arrowdown"] ||
+          keys["arrowleft"] ||
+          keys["arrowright"];
+        const walkBob = isMoving
+          ? Math.sin(runSecondsRef.current * 14) * 2.5
+          : Math.sin(runSecondsRef.current * 3) * 0.8;
+
+        const petStartY =
+          player.y - ((petLines.length - 1) * petLineHeight) / 2 + walkBob;
+
+        ctx.font = `bold ${petFontSize}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = themeColors.primary;
+
+        petLines.forEach((line, idx) => {
+          ctx.fillText(line, player.x, petStartY + idx * petLineHeight);
+        });
+
+        // Head Accessory
+        if (accessories.headGlyph) {
+          ctx.fillStyle = "#00f0ff";
+          ctx.font = "bold 9px monospace";
+          ctx.fillText(accessories.headGlyph, player.x, petStartY - 12);
+        }
+
+        // Drone Companion Accessory
+        if (accessories.droneGlyph) {
+          const droneAngle = runSecondsRef.current * 2.6;
+          const droneDist = 44;
+          const dx = player.x + Math.cos(droneAngle) * droneDist;
+          const dy = player.y + Math.sin(droneAngle) * (droneDist * 0.65);
+          ctx.fillStyle = "#ffcc00";
+          ctx.font = "bold 9px monospace";
+          ctx.fillText(accessories.droneGlyph, dx, dy);
+        }
+
+        // Directional Facing Spark
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(
+          player.x + player.facingX * 22,
+          player.y + player.facingY * 22 + walkBob,
+          2.5,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+
+        // Sleek Floating ASCII Health Bar above Player
+        const currentHpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
+        const hpColor =
+          currentHpRatio < 0.25 ? "#ff2244" : currentHpRatio < 0.5 ? "#ffaa00" : "#00ff66";
+        const hpTextY = petStartY - (accessories.headGlyph ? 18 : 12);
+
+        const totalBlocks = 8;
+        const filledBlocks = Math.round(currentHpRatio * totalBlocks);
+        const emptyBlocks = totalBlocks - filledBlocks;
+        const asciiHp = "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
+
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = hpColor;
+        ctx.fillText(`[${asciiHp}] ${Math.round(player.hp)}`, player.x, hpTextY);
+      }
+
+      // Draw Orbiting ASCII Satellites (летающие вокруг персонажа проджектайлы)
+      const SAT_GLYPHS = ["<01>", "[#]", "(✦)", "[B]", "♦", "<X>"];
+      for (let s = 0; s < satCount; s++) {
+        const satAngle = orbitSpeed + (s * Math.PI * 2) / satCount;
+        const sx = player.x + Math.cos(satAngle) * orbitRadius;
+        const sy = player.y + Math.sin(satAngle) * (orbitRadius * 0.72);
+        const glyph = SAT_GLYPHS[s % SAT_GLYPHS.length];
+
+        ctx.fillStyle = themeColors.primary;
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(glyph, sx, sy);
       }
 
       // Draw Berserk Aura
       if (activeBuff === "BERSERK") {
-        if (currentHpRatio < 0.5) {
+        if (hpRatio < 0.5) {
           ctx.strokeStyle = "rgba(255, 68, 0, 0.75)";
-          ctx.lineWidth = currentHpRatio < 0.25 ? 3 : 2;
+          ctx.lineWidth = hpRatio < 0.25 ? 3 : 2;
           ctx.beginPath();
           ctx.arc(
             player.x,
@@ -1371,35 +1596,18 @@ export function TamagotchiSurvivors({
       // Draw Blademail Reflect Rings
       reflectRingsRef.current.forEach((ring) => {
         ctx.strokeStyle = `rgba(255, 0, 85, ${ring.life * 4.5})`;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
         ctx.stroke();
-
-        for (let sp = 0; sp < 8; sp++) {
-          const ang = (sp * Math.PI * 2) / 8;
-          ctx.beginPath();
-          ctx.moveTo(
-            ring.x + Math.cos(ang) * (ring.radius * 0.65),
-            ring.y + Math.sin(ang) * (ring.radius * 0.65),
-          );
-          ctx.lineTo(
-            ring.x + Math.cos(ang) * ring.radius,
-            ring.y + Math.sin(ang) * ring.radius,
-          );
-          ctx.stroke();
-        }
       });
 
       // Draw Tesla Lightning Bolts
       lightningBoltsRef.current.forEach((bolt) => {
         ctx.strokeStyle = `rgba(0, 240, 255, ${bolt.life * 5.5})`;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(bolt.x1, bolt.y1);
-        const midX = (bolt.x1 + bolt.x2) / 2 + (Math.random() - 0.5) * 24;
-        const midY = (bolt.y1 + bolt.y2) / 2 + (Math.random() - 0.5) * 24;
-        ctx.lineTo(midX, midY);
         ctx.lineTo(bolt.x2, bolt.y2);
         ctx.stroke();
       });
@@ -1445,24 +1653,27 @@ export function TamagotchiSurvivors({
     themeColors.primary,
   ]);
 
-  // Finish run handler
+  // Finish run handler (Awards +50% for Safe Extraction)
   const handleCompleteRun = () => {
     const multiplier = activeBuff === "QUANTUM_RISK" ? 3 : 1;
     const morningExpMult =
       tamagotchi.morningBoostUntil && tamagotchi.morningBoostUntil > Date.now()
         ? 1.25
         : 1.0;
+    const extractionMult = isExtracted ? 1.5 : 1.0;
 
     const baseExp = killsRef.current * 4 + levelRef.current * 15;
-    const totalExp = Math.floor(baseExp * multiplier * morningExpMult);
+    const totalExp = Math.floor(baseExp * multiplier * morningExpMult * extractionMult);
+    const totalBytes = Math.floor(bytesRef.current * multiplier * extractionMult);
 
     onFinishRun({
       survivedTime: runSecondsRef.current,
       enemiesKilled: killsRef.current,
       levelReached: levelRef.current,
-      bytesGathered: bytesRef.current * multiplier,
+      bytesGathered: totalBytes,
       expGathered: totalExp,
-      won: runWon,
+      won: runWon || isExtracted,
+      extracted: isExtracted,
     });
   };
 
@@ -1480,10 +1691,10 @@ export function TamagotchiSurvivors({
       onPointerCancel={handlePointerUp}
       className="fixed inset-0 h-[100dvh] max-h-[100dvh] z-50 flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
     >
-      {/* Sleek Minimal Top HUD */}
-      <div className="relative z-20 flex flex-col border-b border-white/20 bg-black/90 px-3 py-1.5 text-xs touch-none select-none">
+      {/* Sleek Minimal Top HUD: Dropped below iPhone 15 Pro Max Dynamic Island */}
+      <div className="relative z-20 flex flex-col border-b border-white/20 bg-black/95 px-3 pt-[max(env(safe-area-inset-top),3.25rem)] pb-2 text-xs touch-none select-none">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 font-bold">
+          <div className="flex items-center gap-2 font-bold">
             <span className="text-yellow-400 text-sm font-black">
               ⏱ {formatTime(runTime)}
             </span>
@@ -1506,6 +1717,14 @@ export function TamagotchiSurvivors({
             )}
           </div>
 
+          {/* Compass / Extraction Radar indicator (3+ min) */}
+          {isExtractionOpen && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 border border-cyan-400 text-cyan-300 bg-cyan-950/40 text-[0.55rem] font-bold animate-pulse">
+              <span>🛸 ЭВАК: {extractionDist}м</span>
+              <span className="text-xs font-black">{extractionArrow}</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <span
               className="px-1.5 py-0.2 border text-[0.65rem] font-black"
@@ -1527,7 +1746,7 @@ export function TamagotchiSurvivors({
         </div>
 
         {/* Unified Slim HP Bar with integrated cyan EXP underline */}
-        <div className="mt-1 flex flex-col gap-0.5">
+        <div className="mt-1.5 flex flex-col gap-0.5">
           <div className="relative h-3 w-full bg-black/80 border border-white/30 overflow-hidden">
             <div
               className="h-full transition-all duration-150"
@@ -1573,14 +1792,10 @@ export function TamagotchiSurvivors({
           className="absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto touch-none select-none"
         >
           <div
-            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/75 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.8)] touch-none select-none"
+            ref={baseElemRef}
+            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/75 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.8)] touch-none select-none transition-colors duration-150"
             style={{
-              borderColor: isJoystickActive
-                ? themeColors.primary
-                : "rgba(255, 255, 255, 0.35)",
-              boxShadow: isJoystickActive
-                ? `0 0 16px ${themeColors.glow}`
-                : undefined,
+              borderColor: "rgba(255, 255, 255, 0.35)",
             }}
           >
             {/* 4-way crosshair indicators for 360° tactile orientation */}
@@ -1589,13 +1804,11 @@ export function TamagotchiSurvivors({
 
             {/* Joystick Thumb Button */}
             <div
+              ref={thumbElemRef}
               className="h-11 w-11 rounded-full border-2 flex items-center justify-center transition-transform duration-75 pointer-events-none select-none shadow-md"
               style={{
-                transform: `translate(${joystickThumb.x}px, ${joystickThumb.y}px)`,
                 borderColor: themeColors.primary,
-                backgroundColor: isJoystickActive
-                  ? themeColors.primary
-                  : "rgba(0, 255, 102, 0.35)",
+                backgroundColor: "rgba(0, 255, 102, 0.35)",
               }}
             >
               <div className="h-2 w-2 rounded-full bg-white opacity-90" />
@@ -1651,24 +1864,48 @@ export function TamagotchiSurvivors({
         </div>
       )}
 
-      {/* Game Over / Summary Screen */}
+      {/* Game Over / Safe Extraction Summary Screen */}
       {isGameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md">
           <div
-            className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-4 shadow-2xl font-mono text-center"
+            className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-5 shadow-2xl font-mono text-center"
             style={{
-              borderColor: runWon ? themeColors.primary : "#ff3333",
-              boxShadow: `0 0 30px ${runWon ? themeColors.glow : "rgba(255, 50, 50, 0.4)"}`,
+              borderColor: isExtracted
+                ? "#00f0ff"
+                : runWon
+                ? themeColors.primary
+                : "#ff3333",
+              boxShadow: `0 0 30px ${
+                isExtracted
+                  ? "rgba(0, 240, 255, 0.5)"
+                  : runWon
+                  ? themeColors.glow
+                  : "rgba(255, 50, 50, 0.4)"
+              }`,
             }}
           >
             <h2
               className="text-sm font-black uppercase tracking-wider"
-              style={{ color: runWon ? themeColors.primary : "#ff3333" }}
+              style={{
+                color: isExtracted
+                  ? "#00f0ff"
+                  : runWon
+                  ? themeColors.primary
+                  : "#ff3333",
+              }}
             >
-              {runWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ"}
+              {isExtracted
+                ? "🛸 УСПЕШНАЯ ЭВАКУАЦИЯ! 🛸"
+                : runWon
+                ? "ПОБЕДА"
+                : "ПОРАЖЕНИЕ"}
             </h2>
             <p className="text-[0.55rem] text-white/60 mt-0.5">
-              {runWon ? "Сектор очищен!" : "Данные боя сохранены"}
+              {isExtracted
+                ? "Ядро спасено! +50% бонуса к опыту и байтам!"
+                : runWon
+                ? "Сектор очищен!"
+                : "Данные боя сохранены"}
             </p>
 
             <div className="my-3 grid grid-cols-2 gap-2 border border-white/10 bg-black/60 p-2.5 text-xs">
@@ -1689,7 +1926,7 @@ export function TamagotchiSurvivors({
               <div className="flex flex-col text-right mt-1.5">
                 <span className="text-white/40 text-[0.52rem]">БАЙТЫ</span>
                 <span className="font-bold text-yellow-400">
-                  +{bytesCollected} B
+                  +{bytesCollected} B {isExtracted && "(+50%)"}
                 </span>
               </div>
             </div>
@@ -1699,12 +1936,12 @@ export function TamagotchiSurvivors({
               type="button"
               className="w-full border py-2.5 text-xs font-black uppercase tracking-wider transition active:scale-95"
               style={{
-                borderColor: themeColors.primary,
-                backgroundColor: themeColors.primary,
+                borderColor: isExtracted ? "#00f0ff" : themeColors.primary,
+                backgroundColor: isExtracted ? "#00f0ff" : themeColors.primary,
                 color: "#000",
               }}
             >
-              ЗАБРАТЬ НАГРАДЫ
+              {isExtracted ? "ЗАБРАТЬ НАГРАДЫ ЭВАКУАЦИИ" : "ЗАБРАТЬ НАГРАДЫ"}
             </button>
           </div>
         </div>

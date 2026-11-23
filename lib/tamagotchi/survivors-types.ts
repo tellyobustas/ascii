@@ -98,6 +98,19 @@ export const WEAPON_REGISTRY: Record<string, WeaponDef> = {
     baseArea: 50,
     baseCount: 1,
   },
+  plasma_pulse: {
+    id: "plasma_pulse",
+    name: "Plasma Pulse",
+    nameRu: "Плазма",
+    category: "RANGED",
+    description: "Очередь плазменных снарядов [=>>].",
+    glyph: "💠",
+    baseDamage: 24,
+    baseCooldown: 0.65,
+    baseSpeed: 520,
+    baseArea: 20,
+    baseCount: 1,
+  },
 };
 
 export interface ActiveWeapon {
@@ -133,6 +146,9 @@ export interface EnemyEntity {
   glyph: string;
   color: string;
   isBoss?: boolean;
+  shootTimer?: number;
+  chargeTimer?: number;
+  isCharging?: boolean;
 }
 
 export type DropType = "EXP" | "MEDKIT" | "COIN" | "MAGNET" | "NUKE";
@@ -158,6 +174,9 @@ export interface ProjectileEntity {
   lifeTime: number; // seconds left
   pierce: number;
   orbitAngle?: number;
+  isEnemy?: boolean;
+  glyph?: string;
+  color?: string;
 }
 
 export interface FloatingText {
@@ -176,4 +195,5 @@ export interface SurvivorRunResult {
   bytesGathered: number;
   expGathered: number;
   won: boolean;
+  extracted?: boolean;
 }
