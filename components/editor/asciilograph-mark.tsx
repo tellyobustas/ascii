@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 
 const MARK_LINES = [
   "",
@@ -62,240 +61,94 @@ const MARK_LINES = [
 
 const LOGO_COLUMNS = 127;
 const LOGO_ROWS = 54;
-const GLITCH_GLYPHS = "%$#@*x&+<>/\\01";
-const ORBIT_GLYPHS = "%$#@*x&+<>/\\01_-+=";
-const ORBIT_GLYPH_COUNT = 42;
-const ORBIT_GLYPHS_CLOUD = Array.from({ length: ORBIT_GLYPH_COUNT }, (_, index) => {
-  const orbit = index / ORBIT_GLYPH_COUNT;
-  const wave = Math.sin(index * 1.73);
-  const alternate = Math.cos(index * 2.31);
-
-  return {
-    delay: `${-(index * 0.37 + (index % 5) * 0.19).toFixed(2)}s`,
-    duration: `${5.8 + (index % 9) * 0.62}s`,
-    glyph: ORBIT_GLYPHS[index % ORBIT_GLYPHS.length] ?? "#",
-    left: `${7 + orbit * 86 + alternate * 3.8}%`,
-    top: `${9 + ((index * 29) % 82) + wave * 5.2}%`,
-    size: `${0.48 + (index % 7) * 0.095}rem`,
-    opacity: `${0.16 + (index % 6) * 0.055}`,
-    driftX: `${(alternate * 34).toFixed(1)}px`,
-    driftY: `${(wave * 24).toFixed(1)}px`,
-  };
-});
-const CELL_STYLES: Record<string, CSSProperties> = {
-  "░": {
-    backgroundColor: "rgba(0, 255, 102, 0.18)",
-  },
-  "▒": {
-    backgroundColor: "rgba(80, 255, 160, 0.42)",
-  },
-  "▓": {
-    backgroundColor: "rgba(80, 255, 160, 0.74)",
-    boxShadow: "0 0 4px rgba(0, 255, 102, 0.24)",
-  },
-  "█": {
-    backgroundColor: "rgba(0, 255, 102, 0.96)",
-    boxShadow: "0 0 5px rgba(0, 255, 102, 0.38)",
-  },
-};
-
-type LogoGlitchState = {
-  cells: Record<string, CSSProperties>;
-  glyphs: Record<string, string>;
-  rows: Record<number, number>;
-};
-
-type LogoGlitchIntensity = "soft" | "heavy";
-
-const EMPTY_GLITCH: LogoGlitchState = {
-  cells: {},
-  glyphs: {},
-  rows: {},
-};
-
-function getLogoCellStyle(
-  char: string,
-  rowIndex: number,
-  charIndex: number,
-  glitchCells: LogoGlitchState["cells"],
-): CSSProperties | undefined {
-  const baseStyle = CELL_STYLES[char];
-  const glitchStyle = glitchCells[`${rowIndex}-${charIndex}`];
-
-  if (!baseStyle) return glitchStyle;
-  if (!glitchStyle) return baseStyle;
-
-  return {
-    ...baseStyle,
-    ...glitchStyle,
-  };
-}
-
-function buildLogoGlitch(intensity: LogoGlitchIntensity): LogoGlitchState {
-  const rows: Record<number, number> = {};
-  const cells: Record<string, CSSProperties> = {};
-  const glyphs: Record<string, string> = {};
-  const isHeavy = intensity === "heavy";
-  const rowCount = isHeavy
-    ? 12 + Math.floor(Math.random() * 14)
-    : 2 + Math.floor(Math.random() * 4);
-  const cellCount = isHeavy
-    ? 140 + Math.floor(Math.random() * 150)
-    : 22 + Math.floor(Math.random() * 34);
-  const glyphCount = isHeavy
-    ? 26 + Math.floor(Math.random() * 34)
-    : 3 + Math.floor(Math.random() * 7);
-
-  for (let index = 0; index < rowCount; index += 1) {
-    const row = 4 + Math.floor(Math.random() * (LOGO_ROWS - 10));
-    const direction = Math.random() > 0.5 ? 1 : -1;
-    const slide = isHeavy
-      ? direction * (18 + Math.random() * 58)
-      : direction * (2 + Math.random() * 7);
-    const bandHeight = isHeavy
-      ? 3 + Math.floor(Math.random() * 6)
-      : 1 + Math.floor(Math.random() * 2);
-
-    for (let bandIndex = 0; bandIndex < bandHeight; bandIndex += 1) {
-      const bandRow = row + bandIndex;
-      if (bandRow >= LOGO_ROWS) break;
-
-      rows[bandRow] =
-        slide * (1 - bandIndex * 0.08) +
-        (Math.random() > 0.5 ? 1 : -1) * Math.random() * (isHeavy ? 8 : 2);
-    }
-  }
-
-  const pickVisibleCell = () => {
-    const row = Math.floor(Math.random() * LOGO_ROWS);
-    const line = MARK_LINES[row] ?? "";
-    const visibleColumns = line
-      .split("")
-      .map((char, column) => (char === " " ? -1 : column))
-      .filter((column) => column >= 0);
-
-    if (visibleColumns.length === 0) return null;
-
-    const column =
-      visibleColumns[Math.floor(Math.random() * visibleColumns.length)] ?? 0;
-
-    return { column, row };
-  };
-
-  for (let index = 0; index < cellCount; index += 1) {
-    const cell = pickVisibleCell();
-    if (!cell) continue;
-
-    const { column, row } = cell;
-
-    cells[`${row}-${column}`] = {
-      backgroundColor:
-        Math.random() > 0.5
-          ? "rgba(242, 255, 246, 0.96)"
-          : "rgba(0, 255, 102, 1)",
-      boxShadow:
-        Math.random() > 0.72
-          ? isHeavy
-            ? "0 0 18px rgba(242, 255, 246, 0.95)"
-            : "0 0 9px rgba(242, 255, 246, 0.48)"
-          : isHeavy
-            ? "0 0 13px rgba(0, 255, 102, 0.9)"
-            : "0 0 7px rgba(0, 255, 102, 0.42)",
-      transform:
-        Math.random() > (isHeavy ? 0.68 : 0.86)
-          ? `translate(${(Math.random() - 0.5) * (isHeavy ? 10 : 4)}px, ${
-              (Math.random() - 0.5) * (isHeavy ? 7 : 3)
-            }px) scale(${1.05 + Math.random() * (isHeavy ? 1.05 : 0.34)})`
-          : undefined,
-      opacity: isHeavy ? 1 : 0.72 + Math.random() * 0.2,
-    };
-  }
-
-  for (let index = 0; index < glyphCount; index += 1) {
-    const cell = pickVisibleCell();
-    if (!cell) continue;
-
-    const key = `${cell.row}-${cell.column}`;
-    glyphs[key] =
-      GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)] ?? "#";
-    cells[key] = {
-      backgroundColor: isHeavy
-        ? "rgba(0, 255, 102, 0.98)"
-        : "rgba(0, 255, 102, 0.72)",
-      boxShadow: isHeavy
-        ? "0 0 18px rgba(0, 255, 102, 0.96)"
-        : "0 0 8px rgba(0, 255, 102, 0.48)",
-      opacity: isHeavy ? 1 : 0.68,
-      transform: `translate(${(Math.random() - 0.5) * (isHeavy ? 14 : 4)}px, ${
-        (Math.random() - 0.5) * (isHeavy ? 9 : 3)
-      }px) scale(${1.08 + Math.random() * (isHeavy ? 1.27 : 0.42)})`,
-    };
-  }
-
-  return { cells, glyphs, rows };
-}
+const CELL_W = 2.4;
+const CELL_H = 3.2;
+const CANVAS_WIDTH = Math.ceil(LOGO_COLUMNS * CELL_W);
+const CANVAS_HEIGHT = Math.ceil(LOGO_ROWS * CELL_H);
 
 export function AsciilographMark() {
-  const [glitch, setGlitch] = useState<LogoGlitchState>(EMPTY_GLITCH);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) return;
+
+    // Pre-render static pixels to an offscreen canvas (executes ONCE!)
+    const offscreen = document.createElement("canvas");
+    offscreen.width = CANVAS_WIDTH;
+    offscreen.height = CANVAS_HEIGHT;
+    const offCtx = offscreen.getContext("2d");
+    if (!offCtx) return;
+
+    const colors: Record<string, string> = {
+      "░": "rgba(0, 255, 102, 0.22)",
+      "▒": "rgba(80, 255, 160, 0.50)",
+      "▓": "rgba(80, 255, 160, 0.80)",
+      "█": "rgba(0, 255, 102, 0.98)",
+    };
+
+    offCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (let r = 0; r < LOGO_ROWS; r++) {
+      const line = MARK_LINES[r] ?? "";
+      for (let c = 0; c < LOGO_COLUMNS; c++) {
+        const char = line[c];
+        const color = colors[char];
+        if (color) {
+          offCtx.fillStyle = color;
+          offCtx.fillRect(c * CELL_W, r * CELL_H, CELL_W - 0.25, CELL_H - 0.25);
+        }
+      }
     }
 
-    let resetTimer: number | undefined;
-    let softTimer: number | undefined;
-    let heavyTimer: number | undefined;
-    let heavyStepTimer: number | undefined;
-    let burstLeft = 0;
+    const draw = (glitchOffset = 0, glitchRow = -1, glitchHeight = 0) => {
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.drawImage(offscreen, 0, 0);
 
-    const flashGlitch = (
-      intensity: LogoGlitchIntensity,
-      holdMs: number,
-    ) => {
-      setGlitch(buildLogoGlitch(intensity));
-      window.clearTimeout(resetTimer);
-      resetTimer = window.setTimeout(() => setGlitch(EMPTY_GLITCH), holdMs);
-    };
-
-    const scheduleSoftGlitch = (delay: number) => {
-      softTimer = window.setTimeout(() => {
-        if (burstLeft <= 0) {
-          flashGlitch("soft", 52 + Math.random() * 80);
-        }
-
-        scheduleSoftGlitch(780 + Math.random() * 1450);
-      }, delay);
-    };
-
-    const runHeavyBurst = () => {
-      flashGlitch("heavy", 34 + Math.random() * 48);
-
-      if (burstLeft > 0) {
-        burstLeft -= 1;
-        heavyStepTimer = window.setTimeout(
-          runHeavyBurst,
-          34 + Math.random() * 94,
+      // Lightweight horizontal glitch slice
+      if (glitchHeight > 0 && glitchRow >= 0) {
+        const sy = glitchRow * CELL_H;
+        const sh = glitchHeight * CELL_H;
+        ctx.clearRect(0, sy, CANVAS_WIDTH, sh);
+        ctx.drawImage(
+          offscreen,
+          0,
+          sy,
+          CANVAS_WIDTH,
+          sh,
+          glitchOffset,
+          sy,
+          CANVAS_WIDTH,
+          sh,
         );
-        return;
       }
-
-      heavyTimer = window.setTimeout(() => {
-        burstLeft = 3 + Math.floor(Math.random() * 6);
-        runHeavyBurst();
-      }, 10000 + Math.random() * 5000);
     };
 
-    scheduleSoftGlitch(420 + Math.random() * 760);
-    heavyTimer = window.setTimeout(() => {
-      burstLeft = 3 + Math.floor(Math.random() * 6);
-      runHeavyBurst();
-    }, 4500 + Math.random() * 3500);
+    draw();
+
+    // Occasional subtle glitch timer (runs every 3-5s, zero 120Hz churn)
+    let glitchTimer: number | undefined;
+    let resetTimer: number | undefined;
+
+    const scheduleGlitch = () => {
+      glitchTimer = window.setTimeout(() => {
+        const offset = (Math.random() > 0.5 ? 1 : -1) * (4 + Math.random() * 8);
+        const row = Math.floor(Math.random() * (LOGO_ROWS - 10));
+        const height = 2 + Math.floor(Math.random() * 5);
+        draw(offset, row, height);
+
+        resetTimer = window.setTimeout(() => {
+          draw();
+          scheduleGlitch();
+        }, 75);
+      }, 3000 + Math.random() * 3000);
+    };
+
+    scheduleGlitch();
 
     return () => {
-      window.clearTimeout(softTimer);
-      window.clearTimeout(heavyTimer);
-      window.clearTimeout(heavyStepTimer);
+      window.clearTimeout(glitchTimer);
       window.clearTimeout(resetTimer);
     };
   }, []);
@@ -303,75 +156,14 @@ export function AsciilographMark() {
   return (
     <div
       aria-hidden="true"
-      className="asciilograph-mark relative flex w-full justify-center overflow-visible px-8 py-2"
+      className="asciilograph-mark relative flex w-full justify-center overflow-visible px-4 py-2 select-none pointer-events-none"
     >
-      <div className="pointer-events-none absolute inset-y-[-26%] left-[-24%] right-[-24%] opacity-90">
-        {ORBIT_GLYPHS_CLOUD.map((glyph, index) => (
-          <span
-            className="asciilograph-mark-orbit absolute font-mono font-black leading-none text-ascii-green"
-            key={`logo-orbit-${index}`}
-            style={
-              {
-                "--orbit-drift-x": glyph.driftX,
-                "--orbit-drift-y": glyph.driftY,
-                animationDelay: glyph.delay,
-                animationDuration: glyph.duration,
-                fontSize: glyph.size,
-                left: glyph.left,
-                opacity: glyph.opacity,
-                top: glyph.top,
-              } as CSSProperties
-            }
-          >
-            {glyph.glyph}
-          </span>
-        ))}
-      </div>
-      <div
-        className="relative z-10 grid w-full max-w-[22rem] overflow-visible"
-        style={{
-          aspectRatio: `${LOGO_COLUMNS * 0.62} / ${LOGO_ROWS * 1.12}`,
-          gridTemplateRows: `repeat(${LOGO_ROWS}, minmax(0, 1fr))`,
-        }}
-      >
-        {MARK_LINES.map((row, rowIndex) => (
-          <div
-            className="grid min-h-0"
-            key={`logo-row-${rowIndex}`}
-            style={{
-              gridTemplateColumns: `repeat(${LOGO_COLUMNS}, minmax(0, 1fr))`,
-              transform: glitch.rows[rowIndex]
-                ? `translateX(${glitch.rows[rowIndex]}px)`
-                : undefined,
-            }}
-          >
-            {Array.from({ length: LOGO_COLUMNS }, (_, charIndex) => {
-              const char = row[charIndex] ?? " ";
-              const glyph = glitch.glyphs[`${rowIndex}-${charIndex}`];
-
-              return (
-                <span
-                  aria-hidden="true"
-                  className="relative min-h-0 min-w-0"
-                  key={`${rowIndex}-${charIndex}`}
-                  style={getLogoCellStyle(
-                    char,
-                    rowIndex,
-                    charIndex,
-                    glitch.cells,
-                  )}
-                >
-                  {glyph ? (
-                    <span className="absolute left-1/2 top-1/2 font-mono text-[0.58rem] font-black leading-none text-ascii-white [text-shadow:0_0_10px_rgba(242,255,246,0.9),0_0_18px_rgba(0,255,102,0.9)] [transform:translate(-50%,-50%)_scale(1.8)]">
-                      {glyph}
-                    </span>
-                  ) : null}
-                </span>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="block max-w-[270px] w-full h-auto drop-shadow-[0_0_8px_rgba(0,255,102,0.35)]"
+      />
     </div>
   );
 }

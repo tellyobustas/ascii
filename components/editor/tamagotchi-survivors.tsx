@@ -250,35 +250,32 @@ export function TamagotchiSurvivors({
   const byteMultiplier = 1 + (skillTree.BYTE_HARVEST ?? 0) * 0.18;
   const hasRevive = (skillTree.SECOND_CHANCE ?? 0) > 0;
 
-  // React states (Throttled for 60fps performance)
-  const [currentHp, setCurrentHp] = useState(maxHp);
-  const [runTime, setRunTime] = useState(0);
-  const [runLevel, setRunLevel] = useState(1);
-  const [runExp, setRunExp] = useState(0);
-  const [expToNext, setExpToNext] = useState(25);
-  const [kills, setKills] = useState(0);
-  const [bytesCollected, setBytesCollected] = useState(0);
-
-  // Safe Extraction state (Opens after 3:00 / 180s)
-  const [isExtractionOpen, setIsExtractionOpen] = useState(false);
-  const [extractionDist, setExtractionDist] = useState(0);
-  const [extractionArrow, setExtractionArrow] = useState("▲");
-  const [isExtracted, setIsExtracted] = useState(false);
-
-  // Throttling references
-  const lastReportedSecondRef = useRef(-1);
-  const lastReportedHpRef = useRef(maxHp);
-  const lastHpReportTimeRef = useRef(0);
-  const lastReportedKillsRef = useRef(0);
-  const lastReportedBytesRef = useRef(0);
-  const lastReportedExpRef = useRef(0);
-  const lastCompassUpdateRef = useRef(0);
-
-  // Level up & Game over state
+  // React states (Only used for pause modals to ensure 0% React re-render churn during 60fps play)
   const [isLevelingUp, setIsLevelingUp] = useState(false);
   const [upgradeCards, setUpgradeCards] = useState<UpgradeCard[]>([]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [runWon, setRunWon] = useState(false);
+  const [isExtracted, setIsExtracted] = useState(false);
+
+  // Direct HUD DOM references (High-performance zero React overhead)
+  const hudTimeRef = useRef<HTMLSpanElement | null>(null);
+  const hudKillsRef = useRef<HTMLSpanElement | null>(null);
+  const hudBytesRef = useRef<HTMLSpanElement | null>(null);
+  const hudLevelRef = useRef<HTMLSpanElement | null>(null);
+  const hudHpFillRef = useRef<HTMLDivElement | null>(null);
+  const hudHpTextRef = useRef<HTMLDivElement | null>(null);
+  const hudExpFillRef = useRef<HTMLDivElement | null>(null);
+  const hudExtractionRef = useRef<HTMLDivElement | null>(null);
+  const hudExtractionDistRef = useRef<HTMLSpanElement | null>(null);
+  const hudExtractionArrowRef = useRef<HTMLSpanElement | null>(null);
+
+  // Throttling references
+  const lastReportedSecondRef = useRef(-1);
+  const lastReportedHpRef = useRef(maxHp);
+  const lastReportedKillsRef = useRef(0);
+  const lastReportedBytesRef = useRef(0);
+  const lastReportedExpRef = useRef(0);
+  const lastCompassUpdateRef = useRef(0);
 
   // Virtual Joystick & Drag Controls state (Refs avoid 120Hz React re-renders)
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
@@ -383,7 +380,7 @@ export function TamagotchiSurvivors({
     };
   }, []);
 
-  // Dynamic canvas sizing (DPR capped at 1.5 to prevent iPhone 15 Pro Max GPU heating)
+  // Dynamic canvas sizing (DPR capped at 1.25 for cool, ice-cold mobile performance)
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -391,7 +388,7 @@ export function TamagotchiSurvivors({
 
     const updateSize = () => {
       const rect = container.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       const targetW = Math.max(320, Math.floor(rect.width * dpr));
       const targetH = Math.max(400, Math.floor(rect.height * dpr));
       if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -533,7 +530,12 @@ export function TamagotchiSurvivors({
           playerRef.current.hp + playerRef.current.maxHp * 0.5,
         );
         lastReportedHpRef.current = Math.round(playerRef.current.hp);
-        setCurrentHp(lastReportedHpRef.current);
+        if (hudHpFillRef.current) {
+          hudHpFillRef.current.style.width = `${Math.max(0, (playerRef.current.hp / playerRef.current.maxHp) * 100)}%`;
+        }
+        if (hudHpTextRef.current) {
+          hudHpTextRef.current.textContent = `HP ${lastReportedHpRef.current}/${playerRef.current.maxHp}`;
+        }
       }
     }
 
@@ -548,29 +550,33 @@ export function TamagotchiSurvivors({
     if (!ctx) return;
 
     let animationId: number;
-    let lastTimestamp: number | null = null;
+    let lastTimestamp = 0;
 
     const loop = (timestamp: number) => {
-      if (lastTimestamp === null) {
-        lastTimestamp = timestamp;
+      animationId = requestAnimationFrame(loop);
+
+      // Frame rate pacing: on 120Hz ProMotion screens (iPhone 15 Pro Max),
+      // cap physics & rendering to 60 FPS to prevent battery drain and overheating
+      if (lastTimestamp > 0 && timestamp - lastTimestamp < 15.5) {
+        return;
       }
-      const rawDelta = (timestamp - lastTimestamp) / 1000;
-      // Frame rate pacing: clamp dt to avoid huge steps or 120Hz runaway
+      const rawDelta = lastTimestamp === 0 ? 0.016 : (timestamp - lastTimestamp) / 1000;
       const dt = Math.min(Math.max(rawDelta, 0.008), 0.05);
       lastTimestamp = timestamp;
 
       // Pause during Level-Up
       if (isLevelingUp || isGameOver) {
-        animationId = requestAnimationFrame(loop);
         return;
       }
 
-      // Update Run Timers (Throttled to 1/s to avoid re-rendering lag)
+      // Update Run Timers (Throttled to 1/s to avoid lag)
       runSecondsRef.current += dt;
       const floorSec = Math.floor(runSecondsRef.current);
       if (floorSec !== lastReportedSecondRef.current) {
         lastReportedSecondRef.current = floorSec;
-        setRunTime(floorSec);
+        if (hudTimeRef.current) {
+          hudTimeRef.current.textContent = `⏱ ${formatTime(floorSec)}`;
+        }
       }
 
       const player = playerRef.current;
@@ -1034,7 +1040,10 @@ export function TamagotchiSurvivors({
         const exAngle = Math.random() * Math.PI * 2;
         ex.x = player.x + Math.cos(exAngle) * 560;
         ex.y = player.y + Math.sin(exAngle) * 560;
-        setIsExtractionOpen(true);
+        if (hudExtractionRef.current) {
+          hudExtractionRef.current.classList.remove("hidden");
+          hudExtractionRef.current.classList.add("flex");
+        }
         playSound("combo", tamagotchi.soundEnabled);
         triggerHaptic("heavy");
         addFloatingText("🚨 ЭВАКУАЦИЯ ОТКРЫТА! 🚨", player.x, player.y - 40, "#00f0ff");
@@ -1047,16 +1056,23 @@ export function TamagotchiSurvivors({
         // Update compass direction icon for HUD (throttled to 250ms)
         if (timestamp - lastCompassUpdateRef.current > 250) {
           lastCompassUpdateRef.current = timestamp;
-          setExtractionDist(Math.round(dToEx));
+          if (hudExtractionDistRef.current) {
+            hudExtractionDistRef.current.textContent = `${Math.round(dToEx)}`;
+          }
+          let arrow = "►";
           const deg = (ex.beaconAngle * 180) / Math.PI;
-          if (deg >= -22.5 && deg < 22.5) setExtractionArrow("►");
-          else if (deg >= 22.5 && deg < 67.5) setExtractionArrow("◢");
-          else if (deg >= 67.5 && deg < 112.5) setExtractionArrow("▼");
-          else if (deg >= 112.5 && deg < 157.5) setExtractionArrow("◣");
-          else if (deg >= -67.5 && deg < -22.5) setExtractionArrow("◥");
-          else if (deg >= -112.5 && deg < -67.5) setExtractionArrow("▲");
-          else if (deg >= -157.5 && deg < -112.5) setExtractionArrow("◤");
-          else setExtractionArrow("◄");
+          if (deg >= -22.5 && deg < 22.5) arrow = "►";
+          else if (deg >= 22.5 && deg < 67.5) arrow = "◢";
+          else if (deg >= 67.5 && deg < 112.5) arrow = "▼";
+          else if (deg >= 112.5 && deg < 157.5) arrow = "◣";
+          else if (deg >= -67.5 && deg < -22.5) arrow = "◥";
+          else if (deg >= -112.5 && deg < -67.5) arrow = "▲";
+          else if (deg >= -157.5 && deg < -112.5) arrow = "◤";
+          else arrow = "◄";
+
+          if (hudExtractionArrowRef.current) {
+            hudExtractionArrowRef.current.textContent = arrow;
+          }
         }
 
         // Zone hold check
@@ -1304,7 +1320,12 @@ export function TamagotchiSurvivors({
               player.reviveUsed = true;
               player.hp = player.maxHp * 0.5;
               lastReportedHpRef.current = Math.round(player.hp);
-              setCurrentHp(lastReportedHpRef.current);
+              if (hudHpFillRef.current) {
+                hudHpFillRef.current.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+              }
+              if (hudHpTextRef.current) {
+                hudHpTextRef.current.textContent = `HP ${lastReportedHpRef.current}/${player.maxHp}`;
+              }
               playSound("heal", tamagotchi.soundEnabled);
               triggerHaptic("heavy");
               addFloatingText("ВТОРОЕ ДЫХАНИЕ!", player.x, player.y - 30, "#00f0ff");
@@ -1312,7 +1333,12 @@ export function TamagotchiSurvivors({
               setIsGameOver(true);
               setRunWon(false);
               lastReportedHpRef.current = 0;
-              setCurrentHp(0);
+              if (hudHpFillRef.current) {
+                hudHpFillRef.current.style.width = "0%";
+              }
+              if (hudHpTextRef.current) {
+                hudHpTextRef.current.textContent = `HP 0/${player.maxHp}`;
+              }
               playSound("gameLose", tamagotchi.soundEnabled);
               triggerHaptic("error");
             }
@@ -1398,8 +1424,12 @@ export function TamagotchiSurvivors({
               expRef.current -= expToNextRef.current;
               levelRef.current += 1;
               expToNextRef.current = Math.floor(expToNextRef.current * 1.35) + 15;
-              setRunLevel(levelRef.current);
-              setExpToNext(expToNextRef.current);
+              if (hudLevelRef.current) {
+                hudLevelRef.current.textContent = `УР. ${levelRef.current}`;
+              }
+              if (hudExpFillRef.current) {
+                hudExpFillRef.current.style.width = `${Math.min(100, (expRef.current / expToNextRef.current) * 100)}%`;
+              }
 
               setIsLevelingUp(true);
               setUpgradeCards(generateUpgradeCards(weaponsRef.current));
@@ -1421,30 +1451,43 @@ export function TamagotchiSurvivors({
       });
       dropsRef.current = remainingDrops;
 
-      // Batch throttle React state updates (120ms)
+      // Direct DOM updates for HUD (ZERO React re-renders during gameplay!)
       const roundedHp = Math.max(0, Math.round(player.hp));
-      if (
-        roundedHp !== lastReportedHpRef.current &&
-        (timestamp - lastHpReportTimeRef.current > 120 || roundedHp <= 0)
-      ) {
-        lastHpReportTimeRef.current = timestamp;
+      if (roundedHp !== lastReportedHpRef.current) {
         lastReportedHpRef.current = roundedHp;
-        setCurrentHp(roundedHp);
+        if (hudHpFillRef.current) {
+          hudHpFillRef.current.style.width = `${Math.max(0, (roundedHp / player.maxHp) * 100)}%`;
+          hudHpFillRef.current.style.backgroundColor =
+            roundedHp < player.maxHp * 0.25
+              ? "#ff2244"
+              : roundedHp < player.maxHp * 0.5
+              ? "#ffaa00"
+              : themeColors.primary;
+        }
+        if (hudHpTextRef.current) {
+          hudHpTextRef.current.textContent = `HP ${roundedHp}/${player.maxHp}`;
+        }
       }
 
       if (killsRef.current !== lastReportedKillsRef.current) {
         lastReportedKillsRef.current = killsRef.current;
-        setKills(killsRef.current);
+        if (hudKillsRef.current) {
+          hudKillsRef.current.textContent = `💀 ${killsRef.current}`;
+        }
       }
 
       if (bytesRef.current !== lastReportedBytesRef.current) {
         lastReportedBytesRef.current = bytesRef.current;
-        setBytesCollected(bytesRef.current);
+        if (hudBytesRef.current) {
+          hudBytesRef.current.textContent = `💰 ${bytesRef.current}`;
+        }
       }
 
       if (expRef.current !== lastReportedExpRef.current) {
         lastReportedExpRef.current = expRef.current;
-        setRunExp(expRef.current);
+        if (hudExpFillRef.current) {
+          hudExpFillRef.current.style.width = `${Math.min(100, (expRef.current / expToNextRef.current) * 100)}%`;
+        }
       }
 
       // Update Floating Texts
@@ -1459,7 +1502,7 @@ export function TamagotchiSurvivors({
       // ==========================================
       // RENDER SECTION (Zero shadowBlur = Ice Cold Performance!)
       // ==========================================
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const ZOOM = 0.58 * dpr;
@@ -1468,6 +1511,14 @@ export function TamagotchiSurvivors({
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.scale(ZOOM, ZOOM);
       ctx.translate(-player.x, -player.y);
+
+      let currentFont = "";
+      const setFont = (fontStr: string) => {
+        if (currentFont !== fontStr) {
+          ctx.font = fontStr;
+          currentFont = fontStr;
+        }
+      };
 
       // Single-batch Grid Matrix Background (Fast!)
       ctx.strokeStyle = "rgba(0, 255, 102, 0.08)";
@@ -1498,7 +1549,7 @@ export function TamagotchiSurvivors({
         // Ground Conduit Chevrons Trail towards extraction point
         const steps = Math.min(10, Math.floor(dToEx / 60));
         ctx.fillStyle = "rgba(0, 240, 255, 0.45)";
-        ctx.font = "bold 9px monospace";
+        setFont("bold 9px monospace");
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         for (let st = 1; st <= steps; st++) {
@@ -1512,7 +1563,7 @@ export function TamagotchiSurvivors({
         const arrowX = player.x + Math.cos(ex.beaconAngle) * 44;
         const arrowY = player.y + Math.sin(ex.beaconAngle) * 44;
         ctx.fillStyle = "#00f0ff";
-        ctx.font = "bold 11px monospace";
+        setFont("bold 11px monospace");
         ctx.fillText("──►", arrowX, arrowY);
 
         // Pulsing circular extraction zone on ground
@@ -1524,7 +1575,7 @@ export function TamagotchiSurvivors({
         ctx.stroke();
 
         // ASCII Extraction Portal Graphic
-        ctx.font = "bold 10px monospace";
+        setFont("bold 10px monospace");
         ctx.fillStyle = "#00f0ff";
         ctx.fillText(".--[ 🛸 ]--.", ex.x, ex.y - 20);
         ctx.fillText("|  ЭВАКУАЦИЯ  |", ex.x, ex.y - 8);
@@ -1536,11 +1587,11 @@ export function TamagotchiSurvivors({
           const fill = Math.round(pct * barBlocks);
           const asciiHold = "█".repeat(fill) + "░".repeat(barBlocks - fill);
           ctx.fillStyle = "#00ff88";
-          ctx.font = "bold 10px monospace";
+          setFont("bold 10px monospace");
           ctx.fillText(`[${asciiHold}] ${Math.round(pct * 100)}%`, ex.x, ex.y + 22);
         } else {
           ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-          ctx.font = "bold 9px monospace";
+          setFont("bold 9px monospace");
           ctx.fillText("УДЕРЖИВАЙ 3 СЕК", ex.x, ex.y + 20);
         }
       }
@@ -1549,19 +1600,19 @@ export function TamagotchiSurvivors({
       dropsRef.current.forEach((drop) => {
         if (drop.type === "EXP") {
           ctx.fillStyle = "#00f0ff";
-          ctx.font = "bold 13px monospace";
+          setFont("bold 13px monospace");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("◆", drop.x, drop.y);
         } else if (drop.type === "MEDKIT") {
           ctx.fillStyle = "#ff0055";
-          ctx.font = "bold 12px monospace";
+          setFont("bold 12px monospace");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("[✚]", drop.x, drop.y);
         } else if (drop.type === "COIN") {
           ctx.fillStyle = "#ffdd00";
-          ctx.font = "bold 12px monospace";
+          setFont("bold 12px monospace");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("[$]", drop.x, drop.y);
@@ -1591,7 +1642,7 @@ export function TamagotchiSurvivors({
           ctx.stroke();
         } else {
           ctx.fillStyle = p.color ?? "#ff007f";
-          ctx.font = "bold 11px monospace";
+          setFont("bold 11px monospace");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(p.glyph ?? "►", p.x, p.y);
@@ -1604,7 +1655,7 @@ export function TamagotchiSurvivors({
         const frameIdx = Math.floor(runSecondsRef.current * 4) % enemyDef.frames.length;
         const lines = enemyDef.frames[frameIdx];
 
-        ctx.font = `bold ${enemyDef.fontSize}px monospace`;
+        setFont(`bold ${enemyDef.fontSize}px monospace`);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = en.color;
@@ -1633,7 +1684,7 @@ export function TamagotchiSurvivors({
           );
 
           if (en.isBoss) {
-            ctx.font = "bold 9px monospace";
+            setFont("bold 9px monospace");
             ctx.fillStyle = "#ff007f";
             ctx.textAlign = "center";
             ctx.fillText(
@@ -1696,7 +1747,7 @@ export function TamagotchiSurvivors({
         const petStartY =
           player.y - ((petLines.length - 1) * petLineHeight) / 2 + walkBob;
 
-        ctx.font = `bold ${petFontSize}px monospace`;
+        setFont(`bold ${petFontSize}px monospace`);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = themeColors.primary;
@@ -1714,7 +1765,7 @@ export function TamagotchiSurvivors({
                 ? "#fbbf24"
                 : "#f43f5e";
           ctx.fillStyle = headColor;
-          ctx.font = "bold 10px monospace";
+          setFont("bold 10px monospace");
           ctx.fillText(accessories.headGlyph, player.x, petStartY - 6);
         }
 
@@ -1727,7 +1778,7 @@ export function TamagotchiSurvivors({
                 ? "#06b6d4"
                 : "#ec4899";
           ctx.fillStyle = bodyColor;
-          ctx.font = "bold 10px monospace";
+          setFont("bold 10px monospace");
           ctx.fillText(accessories.bodyLeft, player.x - 22, player.y + walkBob);
           ctx.fillText(accessories.bodyRight, player.x + 22, player.y + walkBob);
           if (tamagotchi.bodyAccessory === "FORCE_FIELD") {
@@ -1751,7 +1802,7 @@ export function TamagotchiSurvivors({
                 ? "#38bdf8"
                 : "#f43f5e";
           ctx.fillStyle = droneColor;
-          ctx.font = "bold 10px monospace";
+          setFont("bold 10px monospace");
           ctx.fillText(accessories.droneGlyph, dx, dy);
 
           // Subtle tracer tether
@@ -1785,7 +1836,7 @@ export function TamagotchiSurvivors({
         const emptyBlocks = totalBlocks - filledBlocks;
         const asciiHp = "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
 
-        ctx.font = "bold 10px monospace";
+        setFont("bold 10px monospace");
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = hpColor;
@@ -1801,7 +1852,7 @@ export function TamagotchiSurvivors({
         const glyph = SAT_GLYPHS[s % SAT_GLYPHS.length];
 
         ctx.fillStyle = themeColors.primary;
-        ctx.font = "bold 10px monospace";
+        setFont("bold 10px monospace");
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(glyph, sx, sy);
@@ -1823,7 +1874,7 @@ export function TamagotchiSurvivors({
           ctx.stroke();
 
           ctx.fillStyle = "#ff4400";
-          ctx.font = "bold 9px monospace";
+          setFont("bold 9px monospace");
           ctx.textAlign = "center";
           ctx.fillText("ЯРОСТЬ", player.x, player.y - 32);
         }
@@ -1851,14 +1902,12 @@ export function TamagotchiSurvivors({
       // Draw Floating Damage Texts
       floatingTextsRef.current.forEach((ft) => {
         ctx.fillStyle = ft.color;
-        ctx.font = "bold 11px monospace";
+        setFont("bold 11px monospace");
         ctx.textAlign = "center";
         ctx.fillText(ft.text, ft.x, ft.y);
       });
 
       ctx.restore();
-
-      animationId = requestAnimationFrame(loop);
     };
 
     animationId = requestAnimationFrame(loop);
@@ -1932,14 +1981,14 @@ export function TamagotchiSurvivors({
       <div className="relative z-20 flex flex-col border-b border-white/20 bg-black/95 px-3 pt-[max(env(safe-area-inset-top),3.25rem)] pb-2 text-xs touch-none select-none">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
-            <span className="text-yellow-400 text-sm font-black">
-              ⏱ {formatTime(runTime)}
+            <span ref={hudTimeRef} className="text-yellow-400 text-sm font-black">
+              ⏱ 00:00
             </span>
-            <span className="text-white/70 text-[0.70rem]">
-              💀 {kills}
+            <span ref={hudKillsRef} className="text-white/70 text-[0.70rem]">
+              💀 0
             </span>
-            <span className="text-yellow-400 text-[0.70rem]">
-              💰 {bytesCollected}
+            <span ref={hudBytesRef} className="text-yellow-400 text-[0.70rem]">
+              💰 0
             </span>
             {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
               <span
@@ -1955,22 +2004,24 @@ export function TamagotchiSurvivors({
           </div>
 
           {/* Compass / Extraction Radar indicator (3+ min) */}
-          {isExtractionOpen && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 border border-cyan-400 text-cyan-300 bg-cyan-950/40 text-[0.55rem] font-bold animate-pulse">
-              <span>🛸 ЭВАК: {extractionDist}м</span>
-              <span className="text-xs font-black">{extractionArrow}</span>
-            </div>
-          )}
+          <div
+            ref={hudExtractionRef}
+            className="hidden items-center gap-1 px-1.5 py-0.5 border border-cyan-400 text-cyan-300 bg-cyan-950/40 text-[0.55rem] font-bold animate-pulse"
+          >
+            <span>🛸 ЭВАК: <span ref={hudExtractionDistRef}>0</span>м</span>
+            <span ref={hudExtractionArrowRef} className="text-xs font-black">►</span>
+          </div>
 
           <div className="flex items-center gap-2">
             <span
+              ref={hudLevelRef}
               className="px-1.5 py-0.2 border text-[0.65rem] font-black"
               style={{
                 borderColor: themeColors.primary,
                 color: themeColors.primary,
               }}
             >
-              УР. {runLevel}
+              УР. 1
             </span>
             <button
               onClick={onClose}
@@ -1986,27 +2037,27 @@ export function TamagotchiSurvivors({
         <div className="mt-1.5 flex flex-col gap-0.5">
           <div className="relative h-3 w-full bg-black/80 border border-white/30 overflow-hidden">
             <div
+              ref={hudHpFillRef}
               className="h-full transition-all duration-150"
               style={{
-                width: `${Math.max(0, (currentHp / maxHp) * 100)}%`,
-                backgroundColor:
-                  currentHp < maxHp * 0.25
-                    ? "#ff2244"
-                    : currentHp < maxHp * 0.5
-                    ? "#ffaa00"
-                    : themeColors.primary,
+                width: "100%",
+                backgroundColor: themeColors.primary,
               }}
             />
-            <div className="absolute inset-0 flex items-center justify-center text-[0.58rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-              HP {currentHp}/{maxHp}
+            <div
+              ref={hudHpTextRef}
+              className="absolute inset-0 flex items-center justify-center text-[0.58rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+            >
+              HP {maxHp}/{maxHp}
             </div>
           </div>
           {/* Razor-thin EXP line (0 to 100%) */}
           <div className="h-0.5 w-full bg-white/10 overflow-hidden">
             <div
+              ref={hudExpFillRef}
               className="h-full bg-cyan-400 transition-all duration-100"
               style={{
-                width: `${Math.min(100, (runExp / expToNext) * 100)}%`,
+                width: "0%",
               }}
             />
           </div>
@@ -2030,7 +2081,7 @@ export function TamagotchiSurvivors({
         >
           <div
             ref={baseElemRef}
-            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/75 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.8)] touch-none select-none transition-colors duration-150"
+            className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 bg-black/85 shadow-[0_0_20px_rgba(0,0,0,0.8)] touch-none select-none transition-colors duration-150"
             style={{
               borderColor: "rgba(255, 255, 255, 0.35)",
             }}
@@ -2056,7 +2107,7 @@ export function TamagotchiSurvivors({
 
       {/* In-Run Level Up Card Selection Modal */}
       {isLevelingUp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3">
           <div
             className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-4 shadow-2xl font-mono"
             style={{
@@ -2103,7 +2154,7 @@ export function TamagotchiSurvivors({
 
       {/* Game Over / Safe Extraction Summary Screen */}
       {isGameOver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3">
           <div
             className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-5 shadow-2xl font-mono text-center"
             style={{
@@ -2149,21 +2200,21 @@ export function TamagotchiSurvivors({
               <div className="flex flex-col text-left">
                 <span className="text-white/40 text-[0.52rem]">ВРЕМЯ</span>
                 <span className="font-bold text-yellow-400">
-                  {formatTime(runTime)}
+                  {formatTime(Math.floor(runSecondsRef.current))}
                 </span>
               </div>
               <div className="flex flex-col text-right">
                 <span className="text-white/40 text-[0.52rem]">УБИТО</span>
-                <span className="font-bold text-white">{kills}</span>
+                <span className="font-bold text-white">{killsRef.current}</span>
               </div>
               <div className="flex flex-col text-left mt-1.5">
                 <span className="text-white/40 text-[0.52rem]">УРОВЕНЬ</span>
-                <span className="font-bold text-cyan-400">УР. {runLevel}</span>
+                <span className="font-bold text-cyan-400">УР. {levelRef.current}</span>
               </div>
               <div className="flex flex-col text-right mt-1.5">
                 <span className="text-white/40 text-[0.52rem]">БАЙТЫ</span>
                 <span className="font-bold text-yellow-400">
-                  +{bytesCollected} B {isExtracted && "(+50%)"}
+                  +{bytesRef.current} B {isExtracted && "(+50%)"}
                 </span>
               </div>
             </div>

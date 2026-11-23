@@ -56,7 +56,6 @@ export function TamagotchiScreen({
   activeActionEffect,
 }: TamagotchiScreenProps) {
   const themeColors = THEME_CONFIG[theme] ?? THEME_CONFIG.green;
-  const [bounce, setBounce] = useState(0);
   const [timeInfo, setTimeInfo] = useState(() => {
     if (typeof window === "undefined") {
       return { isNight: false, now: 0 };
@@ -70,21 +69,12 @@ export function TamagotchiScreen({
       const h = new Date().getHours();
       setTimeInfo({ isNight: h >= 23 || h < 7, now: Date.now() });
     };
-    const timer = window.setInterval(update, 15000);
+    const timer = window.setInterval(update, 30000);
     return () => window.clearInterval(timer);
   }, []);
 
   const isNight = timeInfo.isNight;
   const boostActive = Boolean(morningBoostUntil && morningBoostUntil > timeInfo.now);
-
-  // Дыхание питомца
-  useEffect(() => {
-    if (isSleeping) return;
-    const interval = window.setInterval(() => {
-      setBounce((prev) => (prev === 0 ? 1 : 0));
-    }, 650);
-    return () => window.clearInterval(interval);
-  }, [isSleeping]);
 
   const spriteLines = getPetSprite(stage, mood, eggWarmCycles);
   const { headGlyph, droneGlyph, bodyLeft, bodyRight } = getAccessoryOverlay(
@@ -207,13 +197,9 @@ export function TamagotchiScreen({
           {/* Взрослая форма: фирменный ASCII-логотип Asciilograph (без лишних текстовых плашек) */}
           {isAdultOrHigher ? (
             <div
-              className="flex flex-col items-center justify-center transition-transform duration-300"
+              className={`flex flex-col items-center justify-center transition-transform duration-300 ${!isSleeping ? "animate-[pulse_3s_ease-in-out_infinite]" : ""}`}
               style={{
-                transform: isSleeping
-                  ? "scale(0.92) opacity(0.65)"
-                  : bounce === 1
-                    ? "translateY(-3px)"
-                    : "translateY(0px)",
+                transform: isSleeping ? "scale(0.92) opacity(0.65)" : undefined,
                 filter: hasVirus
                   ? "hue-rotate(280deg) saturate(1.8)"
                   : isSleeping
@@ -228,13 +214,9 @@ export function TamagotchiScreen({
           ) : (
             /* Младшие формы: детальный ASCII-спрайт */
             <div
-              className="flex flex-col items-center justify-center transition-transform duration-300"
+              className={`flex flex-col items-center justify-center transition-transform duration-300 ${!isSleeping ? "animate-[pulse_3s_ease-in-out_infinite]" : ""}`}
               style={{
-                transform: isSleeping
-                  ? "scale(0.94)"
-                  : bounce === 1
-                    ? "translateY(-3px)"
-                    : "translateY(0px)",
+                transform: isSleeping ? "scale(0.94)" : undefined,
                 opacity: isSleeping ? 0.6 : 1,
               }}
             >

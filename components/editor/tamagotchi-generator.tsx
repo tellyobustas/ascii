@@ -69,8 +69,9 @@ export function TamagotchiGenerator() {
 
   const effectTimerRef = useRef<number | null>(null);
 
-  // Автосохранение и тики каждые 5 секунд
+  // Автосохранение и тики каждые 5 секунд (приостанавливаются в рейде ради 60fps)
   useEffect(() => {
+    if (showSurvivors) return;
     const interval = window.setInterval(() => {
       setState((prev) => {
         const now = Date.now();
@@ -82,7 +83,7 @@ export function TamagotchiGenerator() {
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [showSurvivors]);
 
   const flashEffect = (text: string) => {
     setActiveActionEffect(text);
@@ -577,7 +578,8 @@ export function TamagotchiGenerator() {
   };
 
   return (
-    <div className="flex flex-col gap-3 font-mono">
+    <>
+      <div className={showSurvivors ? "hidden" : "flex flex-col gap-3 font-mono"}>
       {/* Верхний кибер-дэк HUD */}
       <div className="grid grid-cols-3 gap-2 border border-white/10 bg-black/60 p-2 text-[0.62rem] uppercase tracking-wider">
         <div className="flex flex-col">
@@ -1629,6 +1631,7 @@ export function TamagotchiGenerator() {
           state={state}
         />
       )}
+    </div>
 
       {/* Главный боевой режим Rogue-Lite: Vampire Survivors */}
       {showSurvivors && (
@@ -1675,6 +1678,6 @@ export function TamagotchiGenerator() {
           state={state}
         />
       )}
-    </div>
+    </>
   );
 }
