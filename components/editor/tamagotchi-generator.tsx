@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { TamagotchiGames } from "@/components/editor/tamagotchi-games";
 import { TamagotchiPassport } from "@/components/editor/tamagotchi-passport";
 import { TamagotchiScreen } from "@/components/editor/tamagotchi-screen";
+import { TamagotchiSkillTree } from "@/components/editor/tamagotchi-skill-tree";
+import { TamagotchiSurvivors } from "@/components/editor/tamagotchi-survivors";
+import type { SurvivorRunResult } from "@/lib/tamagotchi/survivors-types";
 import {
   applyTimeDecay,
   archiveAndHatchNewGen,
@@ -45,6 +48,8 @@ export function TamagotchiGenerator() {
   const [showFeedMenu, setShowFeedMenu] = useState(false);
   const [showGameSelect, setShowGameSelect] = useState(false);
   const [activeGame, setActiveGame] = useState<MiniGameType>("NONE");
+  const [showSurvivors, setShowSurvivors] = useState(false);
+  const [showSkillTree, setShowSkillTree] = useState(false);
   const [showPassport, setShowPassport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgrades, setShowUpgrades] = useState(false);
@@ -81,6 +86,50 @@ export function TamagotchiGenerator() {
   const themeColors = THEME_CONFIG[state.theme] ?? THEME_CONFIG.green;
   const mood = calculateMood(state);
   const maxEnergy = getMaxEnergy(state);
+
+  // Расчет боевых характеристик тамагочи для режима Выживания
+  const survivorTree = state.skillTree ?? {};
+  const stageHpBonus: Record<string, number> = {
+    EGG: 60,
+    NIBBLE: 100,
+    SPARK: 140,
+    IMP: 180,
+    PROTO_DAEMON: 230,
+    DAEMON_CORE: 300,
+    CYBER_ARMOR: 400,
+    NEO_OVERLORD: 550,
+    OMEGA_DEITY: 800,
+  };
+  const stageSpeedBonus: Record<string, number> = {
+    EGG: 0,
+    NIBBLE: 0,
+    SPARK: 10,
+    IMP: 15,
+    PROTO_DAEMON: 20,
+    DAEMON_CORE: 28,
+    CYBER_ARMOR: 22,
+    NEO_OVERLORD: 35,
+    OMEGA_DEITY: 50,
+  };
+
+  const combatHp =
+    (stageHpBonus[state.stage] ?? 100) +
+    state.level * 10 +
+    (state.attributes?.ram ?? 0) * 15 +
+    (survivorTree.MAX_HP ?? 0) * 30;
+
+  const combatSpeed =
+    190 +
+    (stageSpeedBonus[state.stage] ?? 0) +
+    state.level * 2 +
+    (survivorTree.MOVE_SPEED ?? 0) * 12;
+
+  const combatMedkitHeal = Math.floor(
+    (35 +
+      (state.attributes?.firewall ?? 0) * 6 +
+      Math.floor(state.level * 1.5)) *
+      (1 + (survivorTree.HEAL_AMP ?? 0) * 0.2),
+  );
 
   // Обработчик тапа по экрану (погладить / инкубация)
   const handleScreenPet = () => {
@@ -255,6 +304,120 @@ export function TamagotchiGenerator() {
       `Игра окончена! +${result.bytesEarned} Байтов, +${result.syncEarned}% Синхронизации, +${result.expEarned} EXP.`,
     );
     flashEffect(result.won ? "★ ПОБЕДА В АРКАДЕ ★" : "+EXP ЗАПИСАН");
+  };
+
+  // Запуск главной игры: Выжившие (Rogue-Lite)
+  const handleLaunchSurvivors = () => {
+    if (state.stage === "EGG") {
+      playSound("error", state.soundEnabled);
+      setStatusMessage("Яйцо не может участвовать в рейде! Сначала прогрей его.");
+      flashEffect("⚠ ТРЕБУЕТСЯ ВЫЛУПЛЕНИЕ");
+      return;
+    }
+
+    if (state.hp <= 0) {
+      playSound("error", state.soundEnabled);
+      setStatusMessage("Питомец отключен! Сделай аварийный ребут.");
+      flashEffect("⚠ АВАРИЙНЫЙ СБОЙ");
+      return;
+    }
+
+    if (state.isSleeping) {
+      playSound("error", state.soundEnabled);
+      setStatusMessage("Питомец спит! Разбуди его перед отправкой в рейд.");
+      flashEffect("💤 В ГИБЕРНАЦИИ");
+      return;
+    }
+
+    const energyCost = 20;
+    if (state.energy < energyCost) {
+      playSound("error", state.soundEnabled);
+      setStatusMessage(
+        `Слишком мало энергии! Нужно ${energyCost}% заряда. Покорми питомца!`,
+      );
+      flashEffect(`⚠ НУЖНО ${energyCost}% ЗАРЯДА`);
+      return;
+    }
+
+    playSound("click", state.soundEnabled);
+    triggerHaptic("heavy");
+
+    setState((prev) => {
+      const updated = {
+        ...prev,
+        energy: Math.max(0, prev.energy - energyCost),
+        lastTick: Date.now(),
+      };
+      saveTamagotchiState(updated);
+      return updated;
+    });
+
+    setShowSurvivors(true);
+  };
+
+  // Завершение рейда Выживших
+  const handleFinishSurvivors = (result: SurvivorRunResult) => {
+    setShowSurvivors(false);
+
+    setState((prev) => {
+      let updated: TamagotchiState = {
+        ...prev,
+        bytes: prev.bytes + result.bytesGathered,
+        bestSurvivorTime: Math.max(
+          prev.bestSurvivorTime ?? 0,
+          Math.floor(result.survivedTime),
+        ),
+        bestSurvivorKills: Math.max(
+          prev.bestSurvivorKills ?? 0,
+          result.enemiesKilled,
+        ),
+        lastTick: Date.now(),
+      };
+
+      // Опыт и уровни
+      let exp = updated.exp + result.expGathered;
+      let level = updated.level;
+      let expToNextLevel = updated.expToNextLevel;
+      let skillPoints = updated.skillPoints;
+
+      while (exp >= expToNextLevel) {
+        exp -= expToNextLevel;
+        level += 1;
+        skillPoints += 1;
+        expToNextLevel = Math.floor(expToNextLevel * 1.3) + 20;
+        updated.bytes += level * 6;
+      }
+
+      updated = {
+        ...updated,
+        exp,
+        level,
+        expToNextLevel,
+        skillPoints,
+      };
+
+      // Прогресс квеста
+      const nextQuests = updated.dailyQuests.map((q) => {
+        if (q.id === "play_2" && !q.completed) {
+          const nextVal = q.current + 1;
+          if (nextVal >= q.target) {
+            updated.bytes += q.rewardBytes;
+            return { ...q, current: q.target, completed: true };
+          }
+          return { ...q, current: nextVal };
+        }
+        return q;
+      });
+
+      updated.dailyQuests = nextQuests;
+      saveTamagotchiState(updated);
+      return updated;
+    });
+
+    setStatusMessage(
+      `Рейд завершен! Выжито ${Math.floor(result.survivedTime)}с, устранено ${result.enemiesKilled} вирусов. +${result.bytesGathered} B, +${result.expGathered} EXP.`,
+    );
+    flashEffect(result.won ? "★ ОВЕРЛОРД ПОВЕРЖЕН ★" : "☠ РЕЙД ЗАВЕРШЕН");
   };
 
   // Колесо фортуны
@@ -541,6 +704,123 @@ export function TamagotchiGenerator() {
         </span>
       </div>
 
+      {/* ============================================================== */}
+      {/* ГЛАВНАЯ ИГРА: КИБЕР-РЕЙД // VAMPIRE SURVIVORS ROGUE-LITE       */}
+      {/* ============================================================== */}
+      <div
+        className="relative overflow-hidden border-2 bg-gradient-to-b from-black/95 via-black/85 to-black/95 p-3.5 shadow-2xl transition"
+        style={{
+          borderColor: themeColors.primary,
+          boxShadow: `0 0 25px ${themeColors.glow}`,
+        }}
+      >
+        {/* Фоновые декоративные элементы */}
+        <div className="absolute -right-4 -top-4 select-none text-[3.5rem] font-black opacity-5 pointer-events-none text-white">
+          SURVIVOR
+        </div>
+
+        {/* Заголовок с бейджем ГЛАВНАЯ ИГРА */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚔️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-black tracking-widest uppercase"
+                  style={{ color: themeColors.primary }}
+                >
+                  КИБЕР-РЕЙД // SURVIVORS
+                </span>
+                <span className="bg-red-500/20 text-red-400 border border-red-500/40 text-[0.48rem] font-black px-1.5 py-0.5 tracking-wider animate-pulse uppercase">
+                  ★ ОСНОВНАЯ ИГРА ★
+                </span>
+              </div>
+              <p className="text-[0.52rem] text-white/50 tracking-wide mt-0.5">
+                Rogue-lite арена: 360° джойстик, ближний и дальний бой, орды багов и боссы
+              </p>
+            </div>
+          </div>
+
+          {/* Рекорд */}
+          <div className="text-right">
+            <span className="text-[0.48rem] uppercase text-white/40 block">РЕКОРД ВЫЖИВАНИЯ</span>
+            <span className="text-[0.62rem] font-black text-amber-400 font-mono">
+              ⏱ {state.bestSurvivorTime ?? 0}с / 👾 {state.bestSurvivorKills ?? 0} КИЛЛОВ
+            </span>
+          </div>
+        </div>
+
+        {/* Сводка боевых характеристик тамагочи */}
+        <div className="mt-2.5 grid grid-cols-3 gap-2 bg-white/5 border border-white/10 p-2 text-center text-[0.55rem]">
+          <div className="flex flex-col">
+            <span className="text-white/40 uppercase">БОЕВОЕ HP</span>
+            <span className="font-black text-xs text-green-400 font-mono mt-0.5">
+              {combatHp}
+            </span>
+            <span className="text-[0.46rem] text-white/40 mt-0.5">
+              СТАДИЯ + RAM + ДРЕВО
+            </span>
+          </div>
+
+          <div className="flex flex-col border-x border-white/10">
+            <span className="text-white/40 uppercase">СКОРОСТЬ БЕГА</span>
+            <span className="font-black text-xs text-cyan-400 font-mono mt-0.5">
+              {combatSpeed}
+            </span>
+            <span className="text-[0.46rem] text-white/40 mt-0.5">
+              УРОВЕНЬ + ДРЕВО
+            </span>
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-white/40 uppercase">ХИЛ АПТЕЧКИ</span>
+            <span className="font-black text-xs text-yellow-400 font-mono mt-0.5">
+              +{combatMedkitHeal} HP
+            </span>
+            <span className="text-[0.46rem] text-white/40 mt-0.5">
+              ФАЕРВОЛ + ДРЕВО
+            </span>
+          </div>
+        </div>
+
+        {/* Кнопки запуска и прокачки */}
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* Кнопка запуска боя */}
+          <button
+            onClick={handleLaunchSurvivors}
+            disabled={state.stage === "EGG" || state.hp <= 0 || state.isSleeping}
+            type="button"
+            className="sm:col-span-2 group relative overflow-hidden py-2.5 px-3 border-2 font-black text-xs uppercase tracking-widest transition-all duration-200 disabled:opacity-40 flex items-center justify-center gap-2"
+            style={{
+              borderColor: themeColors.primary,
+              backgroundColor: themeColors.primary,
+              color: "#000",
+              boxShadow: `0 0 15px ${themeColors.glow}`,
+            }}
+          >
+            <span className="text-sm">⚔️</span>
+            <span>НАЧАТЬ КИБЕР-РЕЙД (-20⚡)</span>
+          </button>
+
+          {/* Кнопка открытия древа навыков */}
+          <button
+            onClick={() => {
+              playSound("click", state.soundEnabled);
+              setShowSkillTree(true);
+            }}
+            type="button"
+            className="border border-purple-500/60 bg-purple-950/20 hover:bg-purple-900/30 text-purple-300 py-2 px-3 font-black text-[0.62rem] uppercase tracking-wider transition flex items-center justify-center gap-1.5"
+          >
+            <span>🌲</span>
+            <span>ДРЕВО ПРОКАЧКИ</span>
+          </button>
+        </div>
+
+        <p className="mt-2 text-[0.48rem] text-white/40 text-center uppercase tracking-wider">
+          💡 Мини-игры внизу пополняют запасы байтов и опыта для прокачки характеристик!
+        </p>
+      </div>
+
       {/* Панель основных кнопок действий */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         {/* КОРМИТЬ */}
@@ -820,8 +1100,8 @@ export function TamagotchiGenerator() {
         </div>
       )}
 
-      {/* Вторичная строка кнопок: Рулетка, Прокачка, Квесты, Гардероб, Настройки */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1 text-[0.58rem] font-black uppercase">
+      {/* Вторичная строка кнопок: Рулетка, Прокачка, Древо, Квесты, Гардероб, Настройки */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 text-[0.58rem] font-black uppercase">
         <button
           onClick={handleSpinWheel}
           type="button"
@@ -842,7 +1122,18 @@ export function TamagotchiGenerator() {
             color: state.skillPoints > 0 ? "#ff007f" : themeColors.primary,
           }}
         >
-          ⚡ ПРОКАЧКА ({state.skillPoints})
+          ⚡ СТАТЫ ({state.skillPoints})
+        </button>
+
+        <button
+          onClick={() => {
+            playSound("click", state.soundEnabled);
+            setShowSkillTree(true);
+          }}
+          type="button"
+          className="border py-2 px-1 text-center transition hover:opacity-80 text-purple-400 border-purple-500/40 bg-purple-950/20"
+        >
+          🌲 ДРЕВО
         </button>
 
         <button
@@ -1188,6 +1479,27 @@ export function TamagotchiGenerator() {
       {showPassport && (
         <TamagotchiPassport
           onClose={() => setShowPassport(false)}
+          state={state}
+        />
+      )}
+
+      {/* Главный боевой режим Rogue-Lite: Vampire Survivors */}
+      {showSurvivors && (
+        <TamagotchiSurvivors
+          onClose={() => setShowSurvivors(false)}
+          onFinishRun={handleFinishSurvivors}
+          tamagotchi={state}
+        />
+      )}
+
+      {/* Мета-прогрессия: Древо навыков за байты */}
+      {showSkillTree && (
+        <TamagotchiSkillTree
+          onClose={() => setShowSkillTree(false)}
+          onUpdateState={(nextState) => {
+            setState(nextState);
+            saveTamagotchiState(nextState);
+          }}
           state={state}
         />
       )}

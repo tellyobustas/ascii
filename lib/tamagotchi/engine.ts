@@ -1,4 +1,9 @@
 import {
+  DEFAULT_SKILL_TREE,
+  getSkillNodeCost,
+  SKILL_TREE_NODES,
+} from "./skill-tree";
+import {
   FOOD_MENU,
   STAGE_NAMES_RU,
   type DroneAccessory,
@@ -79,6 +84,9 @@ export const DEFAULT_TAMAGOTCHI_STATE: TamagotchiState = {
   droneAccessory: "NONE",
   dailyQuests: INITIAL_QUESTS,
   lastWheelSpin: 0,
+  skillTree: DEFAULT_SKILL_TREE,
+  bestSurvivorTime: 0,
+  bestSurvivorKills: 0,
 };
 
 export function getMaxEnergy(state: TamagotchiState): number {
@@ -680,7 +688,13 @@ export function loadTamagotchiState(): TamagotchiState {
         ...DEFAULT_TAMAGOTCHI_STATE.attributes,
         ...(parsed.attributes ?? {}),
       },
+      skillTree: {
+        ...DEFAULT_SKILL_TREE,
+        ...(parsed.skillTree ?? {}),
+      },
       dailyQuests: parsed.dailyQuests ?? INITIAL_QUESTS,
+      bestSurvivorTime: parsed.bestSurvivorTime ?? 0,
+      bestSurvivorKills: parsed.bestSurvivorKills ?? 0,
     };
 
     const elapsedSeconds = Math.max(0, (now - (merged.lastTick || now)) / 1000);
@@ -688,4 +702,45 @@ export function loadTamagotchiState(): TamagotchiState {
   } catch {
     return DEFAULT_TAMAGOTCHI_STATE;
   }
+}
+
+export function buySkillTreeNode(
+  state: TamagotchiState,
+  nodeId: string,
+): { state: TamagotchiState; success: boolean; message: string } {
+  const node = SKILL_TREE_NODES[nodeId];
+  if (!node) {
+    return { state, success: false, message: "Неизвестный узел древа!" };
+  }
+
+  const currentLevel = state.skillTree?.[nodeId] ?? 0;
+  if (currentLevel >= node.maxLevel) {
+    return { state, success: false, message: "Узел уже прокачан до максимума!" };
+  }
+
+  const cost = getSkillNodeCost(nodeId, currentLevel);
+  if (state.bytes < cost) {
+    return {
+      state,
+      success: false,
+      message: `Мало байтов! Нужно ${cost} B (в наличии: ${state.bytes} B).`,
+    };
+  }
+
+  const nextSkillTree = {
+    ...(state.skillTree ?? DEFAULT_SKILL_TREE),
+    [nodeId]: currentLevel + 1,
+  };
+
+  const nextState: TamagotchiState = {
+    ...state,
+    bytes: state.bytes - cost,
+    skillTree: nextSkillTree,
+  };
+
+  return {
+    state: nextState,
+    success: true,
+    message: `Изучено: «${node.nameRu}» (Ур. ${currentLevel + 1}/${node.maxLevel})!`,
+  };
 }

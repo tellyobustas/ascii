@@ -1,3 +1,5 @@
+import type { SkillTreeState } from "./skill-tree";
+
 export type PetStage =
   | "EGG"
   | "NIBBLE"
@@ -201,6 +203,9 @@ export interface TamagotchiState {
   droneAccessory: DroneAccessory;
   dailyQuests: Quest[];
   lastWheelSpin: number; // timestamp
+  skillTree: SkillTreeState;
+  bestSurvivorTime: number; // in seconds
+  bestSurvivorKills: number;
 }
 
 export type MiniGameType = "NONE" | "HACK" | "BUG_SMASH" | "RUNNER";
