@@ -245,7 +245,7 @@ export function VideoGenerator() {
 
   return (
     <div className="mt-4 space-y-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {videoPresetEntries.map(([id, preset]) => (
           <PresetButton
             active={id === presetId}

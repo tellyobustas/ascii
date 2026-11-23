@@ -63,39 +63,66 @@ export async function renderReceiptPng(receipt: RenderReceipt) {
   const parameterRows = rows
     .map((parameter, index) => `<text x="74" y="${650 + index * 54}" class="parameter">${escapeXml(parameter)}</text>`)
     .join("");
+  const presetUpper = (receipt.preset || "").toUpperCase();
+  let primaryColor = "#00ff66";
+  let secondaryColor = "#86ffb2";
+  let labelColor = "#84b494";
+  let parameterColor = "#d4ffe4";
+  let bgColor = "#010302";
+
+  if (presetUpper.includes("CYBER")) {
+    primaryColor = "#00f0ff";
+    secondaryColor = "#ff007f";
+    labelColor = "#b366ff";
+    parameterColor = "#d4ffff";
+    bgColor = "#0a0316";
+  } else if (presetUpper.includes("AMBER")) {
+    primaryColor = "#ffb000";
+    secondaryColor = "#ff8c00";
+    labelColor = "#cca300";
+    parameterColor = "#ffe6b3";
+    bgColor = "#0e0600";
+  } else if (presetUpper.includes("CHROME")) {
+    primaryColor = "#e2ecf7";
+    secondaryColor = "#8faec9";
+    labelColor = "#6d8ba8";
+    parameterColor = "#f0f5fa";
+    bgColor = "#090d14";
+  }
+
   const tearRows = Array.from({ length: 26 }, (_, index) => {
     const x = 18 + random(seed + index * 8.7) * (WIDTH - 36);
-    return `<rect x="${x.toFixed(1)}" y="${HEIGHT - 34 + (index % 2) * 8}" width="${(5 + random(seed + index) * 18).toFixed(1)}" height="3" fill="#00ff66" opacity=".42"/>`;
+    return `<rect x="${x.toFixed(1)}" y="${HEIGHT - 34 + (index % 2) * 8}" width="${(5 + random(seed + index) * 18).toFixed(1)}" height="3" fill="${primaryColor}" opacity=".42"/>`;
   }).join("");
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="#010302"/>
+  <rect width="100%" height="100%" fill="${bgColor}"/>
   <defs>
     <pattern id="scanlines" width="1" height="8" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#ffffff" opacity=".055"/></pattern>
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     <style>
       .mono { font-family: monospace; letter-spacing: 3px; }
       .micro { font-family: monospace; letter-spacing: 2px; font-size: 18px; }
-      .parameter { font-family: monospace; letter-spacing: 2px; font-size: 25px; fill: #d4ffe4; }
+      .parameter { font-family: monospace; letter-spacing: 2px; font-size: 25px; fill: ${parameterColor}; }
     </style>
   </defs>
-  <g fill="#00ff66" font-family="monospace" text-anchor="middle" filter="url(#glow)">${makeMurmuration(seed)}</g>
+  <g fill="${primaryColor}" font-family="monospace" text-anchor="middle" filter="url(#glow)">${makeMurmuration(seed)}</g>
   <rect width="100%" height="100%" fill="url(#scanlines)"/>
-  <rect x="42" y="42" width="816" height="1116" fill="#000000" fill-opacity=".62" stroke="#00ff66" stroke-opacity=".5" stroke-width="2"/>
-  <text x="74" y="100" class="micro" fill="#86ffb2">ASCIILOGRAPH / RENDER RECEIPT</text>
-  <line x1="74" y1="132" x2="826" y2="132" stroke="#00ff66" stroke-opacity=".55" stroke-width="2" stroke-dasharray="8 9"/>
-  <text x="74" y="205" class="micro" fill="#84b494">GENERATOR</text>
-  <text x="74" y="250" class="mono" font-size="42" font-weight="700" fill="#00ff66">${escapeXml(cleanLine(receipt.generator, 20))}</text>
-  <text x="74" y="325" class="micro" fill="#84b494">PRESET</text>
+  <rect x="42" y="42" width="816" height="1116" fill="#000000" fill-opacity=".62" stroke="${primaryColor}" stroke-opacity=".5" stroke-width="2"/>
+  <text x="74" y="100" class="micro" fill="${secondaryColor}">ASCIILOGRAPH / RENDER RECEIPT</text>
+  <line x1="74" y1="132" x2="826" y2="132" stroke="${primaryColor}" stroke-opacity=".55" stroke-width="2" stroke-dasharray="8 9"/>
+  <text x="74" y="205" class="micro" fill="${labelColor}">GENERATOR</text>
+  <text x="74" y="250" class="mono" font-size="42" font-weight="700" fill="${primaryColor}">${escapeXml(cleanLine(receipt.generator, 20))}</text>
+  <text x="74" y="325" class="micro" fill="${labelColor}">PRESET</text>
   <text x="74" y="370" class="mono" font-size="36" font-weight="700" fill="#f2f2f2">${escapeXml(cleanLine(receipt.preset, 30))}</text>
-  <line x1="74" y1="422" x2="826" y2="422" stroke="#00ff66" stroke-opacity=".28" stroke-width="1"/>
-  <text x="74" y="480" class="micro" fill="#84b494">RENDER NUMBER</text>
-  <text x="74" y="526" class="mono" font-size="29" fill="#00ff66">${escapeXml(receipt.renderId)}</text>
-  <text x="74" y="602" class="micro" fill="#84b494">SIGNAL PARAMETERS</text>
+  <line x1="74" y1="422" x2="826" y2="422" stroke="${primaryColor}" stroke-opacity=".28" stroke-width="1"/>
+  <text x="74" y="480" class="micro" fill="${labelColor}">RENDER NUMBER</text>
+  <text x="74" y="526" class="mono" font-size="29" fill="${primaryColor}">${escapeXml(receipt.renderId)}</text>
+  <text x="74" y="602" class="micro" fill="${labelColor}">SIGNAL PARAMETERS</text>
   ${parameterRows}
-  <line x1="74" y1="1004" x2="826" y2="1004" stroke="#00ff66" stroke-opacity=".55" stroke-width="2" stroke-dasharray="8 9"/>
-  <text x="450" y="1070" class="mono" font-size="22" text-anchor="middle" fill="#d4ffe4">ASCIILOGRAPH by gesswrldwide</text>
-  <text x="450" y="1110" class="micro" text-anchor="middle" fill="#5f8b70">KEEP THE SIGNAL / POST THE NOISE</text>
+  <line x1="74" y1="1004" x2="826" y2="1004" stroke="${primaryColor}" stroke-opacity=".55" stroke-width="2" stroke-dasharray="8 9"/>
+  <text x="450" y="1070" class="mono" font-size="22" text-anchor="middle" fill="${parameterColor}">ASCIILOGRAPH by gesswrldwide</text>
+  <text x="450" y="1110" class="micro" text-anchor="middle" fill="${labelColor}">KEEP THE SIGNAL / POST THE NOISE</text>
   ${tearRows}
 </svg>`;
 

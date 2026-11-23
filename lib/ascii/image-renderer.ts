@@ -73,6 +73,185 @@ function colorToCss(color?: Rgb) {
   return `rgb(${color.r},${color.g},${color.b})`;
 }
 
+export type RenderTheme = {
+  backgroundColor: string;
+  borderColor: string;
+  cornerAccentColor: string;
+  foreground: string;
+  glowColor: string;
+  glowStdDev: number;
+  highlightColor?: string;
+  isDuotone?: boolean;
+  osdStyle?: "camcorder" | "cyber" | "minimal" | "none";
+  scanlinesOpacity: number;
+  scanlinesPeriod: number;
+  secondaryColor?: string;
+  vignette: boolean;
+};
+
+export const THEMES: Record<string, RenderTheme> = {
+  "matrix-green": {
+    backgroundColor: "#020704",
+    borderColor: "rgba(0, 255, 102, 0.35)",
+    cornerAccentColor: "#00ff66",
+    foreground: "#00ff66",
+    glowColor: "#00ff66",
+    glowStdDev: 1.2,
+    scanlinesOpacity: 0.45,
+    scanlinesPeriod: 5,
+    vignette: true,
+  },
+  "white-terminal": {
+    backgroundColor: "#070809",
+    borderColor: "rgba(240, 240, 240, 0.3)",
+    cornerAccentColor: "#f2f2f2",
+    foreground: "#f2f2f2",
+    glowColor: "#ffffff",
+    glowStdDev: 1.0,
+    scanlinesOpacity: 0.35,
+    scanlinesPeriod: 6,
+    vignette: false,
+  },
+  "cyber-y2k": {
+    backgroundColor: "#0a0316",
+    borderColor: "rgba(0, 240, 255, 0.55)",
+    cornerAccentColor: "#ff007f",
+    foreground: "#00f0ff",
+    glowColor: "#00f0ff",
+    glowStdDev: 1.6,
+    highlightColor: "#ccff00",
+    isDuotone: true,
+    osdStyle: "camcorder",
+    scanlinesOpacity: 0.55,
+    scanlinesPeriod: 4,
+    secondaryColor: "#ff007f",
+    vignette: true,
+  },
+  "liquid-chrome": {
+    backgroundColor: "#090d14",
+    borderColor: "rgba(168, 192, 222, 0.45)",
+    cornerAccentColor: "#dbe7f5",
+    foreground: "#e2ecf7",
+    glowColor: "#8faec9",
+    glowStdDev: 1.3,
+    highlightColor: "#ffffff",
+    isDuotone: true,
+    osdStyle: "cyber",
+    scanlinesOpacity: 0.4,
+    scanlinesPeriod: 5,
+    secondaryColor: "#708da8",
+    vignette: true,
+  },
+  "amber-crt": {
+    backgroundColor: "#0e0600",
+    borderColor: "rgba(255, 150, 0, 0.45)",
+    cornerAccentColor: "#ffaa00",
+    foreground: "#ffb000",
+    glowColor: "#ff8c00",
+    glowStdDev: 1.5,
+    highlightColor: "#fff0b3",
+    scanlinesOpacity: 0.5,
+    scanlinesPeriod: 4,
+    secondaryColor: "#b36200",
+    vignette: true,
+  },
+};
+
+export function resolveTheme(
+  preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId],
+): RenderTheme {
+  const modeKey = String(preset.mode);
+  if (modeKey in THEMES) {
+    return THEMES[modeKey];
+  }
+  if (modeKey === "white-terminal") {
+    return THEMES["white-terminal"];
+  }
+  return THEMES["matrix-green"];
+}
+
+function getDuotoneCharColor(character: string, theme: RenderTheme): string {
+  if ("@#%$█▓WMB8&".includes(character)) {
+    return theme.highlightColor || theme.foreground;
+  }
+  if ("*+=oxO01▒/\\|!<>?[]{}".includes(character)) {
+    return theme.foreground;
+  }
+  return theme.secondaryColor || theme.foreground;
+}
+
+function renderOsdHud(options: {
+  height: number;
+  osdStyle?: "camcorder" | "cyber" | "minimal" | "none";
+  padding: number;
+  preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
+  theme: RenderTheme;
+  width: number;
+}) {
+  if (!options.osdStyle || options.osdStyle === "none") return "";
+
+  const { width, height, padding, theme } = options;
+  const fg = theme.cornerAccentColor || theme.foreground;
+  const sub = "rgba(255,255,255,0.6)";
+  const parts: string[] = [];
+
+  const bracketSize = Math.max(12, Math.min(24, Math.round(width * 0.03)));
+  const strokeW = 1.5;
+  const inset = Math.max(6, Math.round(padding * 0.35));
+
+  // Corner brackets [ + ]
+  parts.push(
+    `<path d="M ${svgNumber(inset + bracketSize)} ${svgNumber(inset)} L ${svgNumber(inset)} ${svgNumber(inset)} L ${svgNumber(inset)} ${svgNumber(inset + bracketSize)}" fill="none" stroke="${fg}" stroke-width="${strokeW}"/>`,
+  );
+  parts.push(
+    `<path d="M ${svgNumber(width - inset - bracketSize)} ${svgNumber(inset)} L ${svgNumber(width - inset)} ${svgNumber(inset)} L ${svgNumber(width - inset)} ${svgNumber(inset + bracketSize)}" fill="none" stroke="${fg}" stroke-width="${strokeW}"/>`,
+  );
+  parts.push(
+    `<path d="M ${svgNumber(inset)} ${svgNumber(height - inset - bracketSize)} L ${svgNumber(inset)} ${svgNumber(height - inset)} L ${svgNumber(inset + bracketSize)} ${svgNumber(height - inset)}" fill="none" stroke="${fg}" stroke-width="${strokeW}"/>`,
+  );
+  parts.push(
+    `<path d="M ${svgNumber(width - inset)} ${svgNumber(height - inset - bracketSize)} L ${svgNumber(width - inset)} ${svgNumber(height - inset)} L ${svgNumber(width - inset - bracketSize)} ${svgNumber(height - inset)}" fill="none" stroke="${fg}" stroke-width="${strokeW}"/>`,
+  );
+
+  if (options.osdStyle === "camcorder") {
+    const fontSize = Math.max(9, Math.min(13, Math.round(width * 0.016)));
+    parts.push(
+      `<circle cx="${svgNumber(inset + bracketSize + 14)}" cy="${svgNumber(inset + fontSize * 0.6)}" r="3.5" fill="#ff0055"/>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(inset + bracketSize + 22)}" y="${svgNumber(inset + fontSize)}" font-family="monospace" font-size="${fontSize}" font-weight="700" fill="#ff0055" letter-spacing="1.5">REC</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(inset + bracketSize + 64)}" y="${svgNumber(inset + fontSize)}" font-family="monospace" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1">SP 0:00:04</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(width - inset - bracketSize - 8)}" y="${svgNumber(inset + fontSize)}" text-anchor="end" font-family="monospace" font-size="${svgNumber(fontSize * 0.88)}" fill="${fg}" letter-spacing="1">STEREO 48kHz [■■□]</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(inset + 10)}" y="${svgNumber(height - inset - 5)}" font-family="monospace" font-size="${svgNumber(fontSize * 0.88)}" fill="${fg}" letter-spacing="1.2">OCT.24.2001 02:47:19</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(width - inset - 10)}" y="${svgNumber(height - inset - 5)}" text-anchor="end" font-family="monospace" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1.2">ASCIILOGRAPH Y2K</text>`,
+    );
+  } else if (options.osdStyle === "cyber") {
+    const fontSize = Math.max(9, Math.min(13, Math.round(width * 0.016)));
+    parts.push(
+      `<text x="${svgNumber(inset + bracketSize + 8)}" y="${svgNumber(inset + fontSize)}" font-family="monospace" font-size="${fontSize}" fill="${fg}" letter-spacing="2">SYS_SIG: ONLINE [100%]</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(width - inset - bracketSize - 8)}" y="${svgNumber(inset + fontSize)}" text-anchor="end" font-family="monospace" font-size="${fontSize}" fill="${sub}" letter-spacing="1.5">CH-02 // DITHER</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(inset + 10)}" y="${svgNumber(height - inset - 5)}" font-family="monospace" font-size="${svgNumber(fontSize * 0.88)}" fill="${sub}" letter-spacing="1.2">RAW BITSTREAM // 2000s</text>`,
+    );
+    parts.push(
+      `<text x="${svgNumber(width - inset - 10)}" y="${svgNumber(height - inset - 5)}" text-anchor="end" font-family="monospace" font-size="${fontSize * 0.88}" fill="${fg}" letter-spacing="1.2">ASCIILOGRAPH</text>`,
+    );
+  }
+
+  return `<g class="osd-overlay">${parts.join("\n    ")}</g>`;
+}
+
 function boostColor(color: Rgb, boost: number): Rgb {
   if (boost === 1) return color;
 
@@ -196,7 +375,7 @@ function renderBlockGlyph(character: string, x: number, y: number, size: number)
   )}" opacity="${svgNumber(opacity)}"/>`;
 }
 
-function renderVectorGlyph(
+function renderVectorGlyphContent(
   character: string,
   x: number,
   y: number,
@@ -280,6 +459,47 @@ function renderVectorGlyph(
       return line(left, top, right, bottom) + line(right, top, left, bottom);
     case "!":
       return line(midX, top, midX, y + height * 0.66) + circle(midX, bottom);
+    case "~":
+      return (
+        line(left, midY, left + width * 0.25, top + height * 0.1) +
+        line(left + width * 0.25, top + height * 0.1, midX, midY) +
+        line(midX, midY, right - width * 0.25, bottom - height * 0.1) +
+        line(right - width * 0.25, bottom - height * 0.1, right, midY)
+      );
+    case "^":
+      return line(left, midY, midX, top) + line(midX, top, right, midY);
+    case "[":
+      return (
+        line(right, top, left, top) +
+        line(left, top, left, bottom) +
+        line(left, bottom, right, bottom)
+      );
+    case "]":
+      return (
+        line(left, top, right, top) +
+        line(right, top, right, bottom) +
+        line(right, bottom, left, bottom)
+      );
+    case "(":
+      return line(right, top, left, midY) + line(left, midY, right, bottom);
+    case ")":
+      return line(left, top, right, midY) + line(right, midY, left, bottom);
+    case "'":
+    case "`":
+      return line(midX, top, left + width * 0.2, top + height * 0.28);
+    case '"':
+      return (
+        line(left + width * 0.2, top, left + width * 0.1, top + height * 0.28) +
+        line(right - width * 0.1, top, right - width * 0.2, top + height * 0.28)
+      );
+    case "?":
+      return (
+        line(left, top + height * 0.1, midX, top) +
+        line(midX, top, right, top + height * 0.1) +
+        line(right, top + height * 0.1, midX, midY) +
+        line(midX, midY, midX, y + height * 0.66) +
+        circle(midX, bottom)
+      );
     default: {
       const pattern = PIXEL_GLYPHS[character.toUpperCase()];
       if (pattern) {
@@ -295,6 +515,20 @@ function renderVectorGlyph(
       return line(left, top, right, bottom) + line(right, top, left, bottom);
     }
   }
+}
+
+function renderVectorGlyph(
+  character: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color?: string,
+) {
+  const content = renderVectorGlyphContent(character, x, y, width, height);
+  if (!content) return "";
+  if (!color) return content;
+  return `<g fill="${color}" stroke="${color}">${content}</g>`;
 }
 
 async function readResizedPixels(
@@ -504,6 +738,7 @@ function renderBrailleSvg(options: {
   overlay?: string;
   preset: (typeof IMAGE_ASCII_PRESETS)[ImageAsciiPresetId];
 }) {
+  const theme = resolveTheme(options.preset);
   const maxColumns = Math.max(options.canvasColumns, 1);
   const cellWidth = Math.max(5.8, Math.min(9.5, 900 / maxColumns));
   const cellHeight = cellWidth * 1.85;
@@ -512,8 +747,7 @@ function renderBrailleSvg(options: {
   const height = Math.ceil(options.canvasRows * cellHeight + padding * 2);
   const dotRadius = cellWidth * 0.15;
   const shapes: string[] = [];
-  const foreground =
-    String(options.preset.mode) === "white-terminal" ? "#f2f2f2" : "#00ff66";
+  const foreground = theme.foreground;
   const dotPositions = [
     [0.3, 0.16, 0x01],
     [0.3, 0.39, 0x02],
@@ -542,7 +776,7 @@ function renderBrailleSvg(options: {
         shapes.push(
           `<circle cx="${svgNumber(cellX + dotX * cellWidth)}" cy="${svgNumber(
             cellY + dotY * cellHeight,
-          )}" r="${svgNumber(dotRadius)}" fill="${color}"/>`,
+          )}" r="${svgNumber(dotRadius)}" fill="${color || foreground}"/>`,
         );
       }
     }
@@ -552,22 +786,31 @@ function renderBrailleSvg(options: {
     height,
     svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <rect width="100%" height="100%" fill="#000000"/>
+  <rect width="100%" height="100%" fill="${theme.backgroundColor}"/>
   <defs>
+    <radialGradient id="crtVignette" cx="50%" cy="50%" r="72%">
+      <stop offset="50%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#000000" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
     <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="1.4" result="blur"/>
+      <feGaussianBlur stdDeviation="${svgNumber(theme.glowStdDev * 0.75)}" result="blur1"/>
+      <feGaussianBlur stdDeviation="${svgNumber(theme.glowStdDev * 2)}" result="blur2"/>
       <feMerge>
-        <feMergeNode in="blur"/>
+        <feMergeNode in="blur2" opacity="0.35"/>
+        <feMergeNode in="blur1" opacity="0.65"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <pattern id="scanlines" width="1" height="7" patternUnits="userSpaceOnUse">
-      <rect y="0" width="1" height="1" fill="rgba(255,255,255,0.04)"/>
+    <pattern id="scanlines" width="1" height="${theme.scanlinesPeriod}" patternUnits="userSpaceOnUse">
+      <rect y="0" width="1" height="1.2" fill="#000000" opacity="${svgNumber(theme.scanlinesOpacity)}"/>
     </pattern>
   </defs>
-  <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.55"/>
-  <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="rgba(0,255,102,0.25)" stroke-width="1"/>
+  <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="${theme.borderColor}" stroke-width="1.5"/>
   <g filter="url(#softGlow)" fill="${foreground}">${shapes.join("\n    ")}</g>
+  <rect width="100%" height="100%" fill="url(#scanlines)"/>
+  ${theme.vignette ? '<rect width="100%" height="100%" fill="url(#crtVignette)"/>' : ""}
+  ${renderOsdHud({ height, osdStyle: theme.osdStyle, padding, preset: options.preset, theme, width })}
   ${options.overlay ?? ""}
 </svg>`,
     width,
@@ -586,6 +829,7 @@ function renderAsciiSvg(options: {
     return renderBrailleSvg(options);
   }
 
+  const theme = resolveTheme(options.preset);
   const maxColumns = Math.max(options.canvasColumns, 1);
   const fontSize = Math.max(7, Math.min(15, Math.floor(940 / maxColumns)));
   const charWidth = fontSize * 0.62;
@@ -593,8 +837,7 @@ function renderAsciiSvg(options: {
   const padding = Math.round(fontSize * 2.2);
   const width = Math.ceil(maxColumns * charWidth + padding * 2);
   const height = Math.ceil(options.canvasRows * lineHeight + padding * 2);
-  const foreground =
-    String(options.preset.mode) === "white-terminal" ? "#f2f2f2" : "#00ff66";
+  const foreground = theme.foreground;
   const shapes: string[] = [];
 
   for (let row = 0; row < options.lines.length; row += 1) {
@@ -605,6 +848,13 @@ function renderAsciiSvg(options: {
       const character = line[column];
       if (character === " ") continue;
 
+      let color: string | undefined;
+      if (options.colors?.[row]?.[column]) {
+        color = colorToCss(options.colors[row][column]);
+      } else if (theme.isDuotone) {
+        color = getDuotoneCharColor(character, theme);
+      }
+
       shapes.push(
         renderVectorGlyph(
           character,
@@ -612,6 +862,7 @@ function renderAsciiSvg(options: {
           top,
           charWidth,
           fontSize,
+          color,
         ),
       );
     }
@@ -621,24 +872,33 @@ function renderAsciiSvg(options: {
     height,
     svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <rect width="100%" height="100%" fill="#000000"/>
+  <rect width="100%" height="100%" fill="${theme.backgroundColor}"/>
   <defs>
+    <radialGradient id="crtVignette" cx="50%" cy="50%" r="72%">
+      <stop offset="50%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#000000" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
     <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feGaussianBlur stdDeviation="${svgNumber(theme.glowStdDev * 0.75)}" result="blur1"/>
+      <feGaussianBlur stdDeviation="${svgNumber(theme.glowStdDev * 2)}" result="blur2"/>
       <feMerge>
-        <feMergeNode in="blur"/>
+        <feMergeNode in="blur2" opacity="0.35"/>
+        <feMergeNode in="blur1" opacity="0.65"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <pattern id="scanlines" width="1" height="7" patternUnits="userSpaceOnUse">
-      <rect y="0" width="1" height="1" fill="rgba(255,255,255,0.04)"/>
+    <pattern id="scanlines" width="1" height="${theme.scanlinesPeriod}" patternUnits="userSpaceOnUse">
+      <rect y="0" width="1" height="1.2" fill="#000000" opacity="${svgNumber(theme.scanlinesOpacity)}"/>
     </pattern>
   </defs>
-  <rect width="100%" height="100%" fill="url(#scanlines)" opacity="0.55"/>
-  <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="rgba(0,255,102,0.25)" stroke-width="1"/>
+  <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="${theme.borderColor}" stroke-width="1.5"/>
   <g filter="url(#softGlow)" fill="${foreground}" stroke="${foreground}" stroke-linecap="round" stroke-linejoin="round">
     ${shapes.join("\n    ")}
   </g>
+  <rect width="100%" height="100%" fill="url(#scanlines)"/>
+  ${theme.vignette ? '<rect width="100%" height="100%" fill="url(#crtVignette)"/>' : ""}
+  ${renderOsdHud({ height, osdStyle: theme.osdStyle, padding, preset: options.preset, theme, width })}
   ${options.overlay ?? ""}
 </svg>`,
     width,
@@ -695,6 +955,20 @@ export async function prepareImageAsciiFrame(
     lines = ditherToChars(lumas, pixels.width, pixels.height, preset, invert);
     canvasColumns = pixels.width;
     canvasRows = pixels.height;
+
+    if (preset.litPixelColorSampling) {
+      const sampledColors: Array<Array<Rgb | undefined>> = [];
+      for (let y = 0; y < pixels.height; y += 1) {
+        const lineColors: Array<Rgb | undefined> = [];
+        for (let x = 0; x < pixels.width; x += 1) {
+          const index = y * pixels.width + x;
+          const sample = sampleRgb(pixels.rgb, index);
+          lineColors.push(boostColor(sample, preset.colorBoost));
+        }
+        sampledColors.push(lineColors);
+      }
+      colors = sampledColors;
+    }
   }
 
   return {

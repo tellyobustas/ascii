@@ -32,8 +32,10 @@ export type RenderedAsciiVideo = {
 };
 
 const VIDEO_TO_IMAGE_PRESET: Record<VideoAsciiPresetId, string> = {
+  amberMotion: "amberCrt",
   bayerMotion: "bayerDither",
   brailleMotion: "brailleMono",
+  cyberGlitch: "cyberY2K",
   matrixPulse: "matrixAscii",
   telegramLoop: "matrixAscii",
 };

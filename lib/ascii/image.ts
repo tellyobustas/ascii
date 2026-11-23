@@ -6,6 +6,9 @@ export const IMAGE_RENDER_MODES = [
   "blocks-braille",
   "matrix-green",
   "white-terminal",
+  "cyber-y2k",
+  "liquid-chrome",
+  "amber-crt",
 ] as const;
 
 export type ImageRenderMode = (typeof IMAGE_RENDER_MODES)[number];
@@ -56,6 +59,10 @@ export const IMAGE_CHARACTER_SETS = {
   binary: {
     label: "Binary",
     chars: " 01",
+  },
+  cyberWarez: {
+    label: "Cyber Warez",
+    chars: " .:+*oO#%@█",
   },
 } as const;
 
@@ -180,6 +187,66 @@ export const IMAGE_ASCII_PRESETS = {
       "2x4 Unicode braille cells",
       "samples color only from lit pixels",
       "best for detailed Telegram PNGs",
+    ],
+  },
+  cyberY2K: {
+    label: "Cyber Y2K",
+    shortLabel: "CYBER",
+    mode: "cyber-y2k",
+    characterSet: "cyberWarez",
+    outputWidth: 104,
+    threshold: 120,
+    density: 0.95,
+    contrast: 1.3,
+    brightness: 1.04,
+    sharpen: 1.2,
+    colorBoost: 1.35,
+    litPixelColorSampling: true,
+    transparentBackground: false,
+    notes: [
+      "electric cyan & hot magenta Y2K palette",
+      "camcorder HUD & retro CRT scanlines",
+      "phosphor bloom with duotone highlights",
+    ],
+  },
+  liquidChrome: {
+    label: "Liquid Chrome",
+    shortLabel: "CHROME",
+    mode: "liquid-chrome",
+    characterSet: "fine",
+    outputWidth: 112,
+    threshold: 126,
+    density: 1.05,
+    contrast: 1.45,
+    brightness: 1.02,
+    sharpen: 1.25,
+    colorBoost: 1.1,
+    litPixelColorSampling: false,
+    transparentBackground: false,
+    notes: [
+      "metallic silver & platinum reflections",
+      "dithered specular highlights",
+      "cold futuristic chrome aesthetic",
+    ],
+  },
+  amberCrt: {
+    label: "Amber CRT",
+    shortLabel: "AMBER",
+    mode: "amber-crt",
+    characterSet: "shadedBlocks",
+    outputWidth: 98,
+    threshold: 124,
+    density: 0.92,
+    contrast: 1.24,
+    brightness: 1,
+    sharpen: 1.12,
+    colorBoost: 1,
+    litPixelColorSampling: false,
+    transparentBackground: false,
+    notes: [
+      "warm vintage phosphor amber glow",
+      "deep contrast aperture grille",
+      "classic mainframe terminal feel",
     ],
   },
 } as const satisfies Record<

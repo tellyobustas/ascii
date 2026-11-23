@@ -39,10 +39,12 @@ const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 const MAX_VIDEO_DIMENSION = 720;
 const GLITCH_GLYPHS = "#$%*@01+<>[]{}";
 const GLITCH_COLORS: Rgb[] = [
-  { b: 102, g: 255, r: 0 },
-  { b: 210, g: 255, r: 190 },
-  { b: 242, g: 242, r: 242 },
-  { b: 180, g: 230, r: 60 },
+  { b: 255, g: 240, r: 0 }, // Electric cyan #00f0ff
+  { b: 127, g: 0, r: 255 }, // Hot magenta #ff007f
+  { b: 0, g: 255, r: 204 }, // Acid lime #ccff00
+  { b: 102, g: 255, r: 0 }, // Matrix green #00ff66
+  { b: 255, g: 255, r: 255 }, // Specular white #ffffff
+  { b: 0, g: 176, r: 255 }, // Phosphor amber #ffb000
 ];
 
 type FfmpegResult = {
@@ -277,20 +279,48 @@ function renderGlitchOverlay(
   const bandCount = random(seed + frameIndex * 2.71) > 0.72 ? 3 : 1;
   const parts: string[] = [];
 
+  // Horizontal scanline glitch bursts
   for (let index = 0; index < bandCount; index += 1) {
     const y = random(seed + frameIndex * 8.13 + index * 19.2) * height;
     const bandHeight = 1 + random(seed + frameIndex + index * 31.1) * 8;
     const x = (random(seed + frameIndex * 4.4 + index) - 0.5) * 18;
-    const fill = index % 2 === 0 ? "#00ff66" : "#f2f2f2";
+    const colors = ["#00f0ff", "#ff007f", "#ccff00", "#ffffff"];
+    const fill = colors[index % colors.length] || "#00f0ff";
 
     parts.push(
       `<rect x="${svgNumber(x)}" y="${svgNumber(y)}" width="${svgNumber(
         width + 36,
       )}" height="${svgNumber(bandHeight)}" fill="${fill}" opacity="${svgNumber(
-        opacity,
+        opacity * 1.2,
       )}"/>`,
     );
   }
+
+  // VHS bottom tracking noise band
+  const hasVhsNoise = random(seed + frameIndex * 11.3) > 0.3;
+  if (hasVhsNoise) {
+    const vhsHeight = 4 + random(seed + frameIndex * 5.7) * 8;
+    const vhsY = height - 16 - random(seed + frameIndex * 3.1) * 4;
+    parts.push(
+      `<rect x="0" y="${svgNumber(vhsY)}" width="${svgNumber(
+        width,
+      )}" height="${svgNumber(vhsHeight)}" fill="#ffffff" opacity="${svgNumber(
+        0.08 + random(seed + frameIndex * 7.1) * 0.14,
+      )}"/>`,
+    );
+  }
+
+  // Dynamic Camcorder timecode overlay for video
+  const second = Math.floor(frameIndex / 10);
+  const frameSub = String((frameIndex % 10) * 3).padStart(2, "0");
+  const timecode = `SP 0:00:0${second}:${frameSub}`;
+  parts.push(
+    `<g opacity="0.85"><text x="${svgNumber(
+      width * 0.5,
+    )}" y="${svgNumber(
+      height - 10,
+    )}" font-family="monospace" font-size="10" fill="#00f0ff" text-anchor="middle" letter-spacing="1.5">${timecode}</text></g>`,
+  );
 
   return `<g style="mix-blend-mode:screen">${parts.join("\n")}</g>`;
 }
