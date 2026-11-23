@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AsciilographMark } from "@/components/editor/asciilograph-mark";
 import { ImageGenerator } from "@/components/editor/image-generator";
 import { MurmurationGenerator } from "@/components/editor/murmuration-generator";
+import { TamagotchiGenerator } from "@/components/editor/tamagotchi-generator";
 import { TextGenerator } from "@/components/editor/text-generator";
 import { VideoGenerator } from "@/components/editor/video-generator";
 import {
@@ -11,7 +12,7 @@ import {
   loadTelegramWebAppSdk,
 } from "@/lib/telegram/client-export";
 
-const tabs = ["TEXT", "IMAGE", "VIDEO", "MURMURATION"] as const;
+const tabs = ["TEXT", "IMAGE", "VIDEO", "MURMURATION", "TAMAGOTCHI"] as const;
 const BRAND = "ASCIILOGRAPH";
 const GLITCH_GLYPHS = "#$%*+/\\<>[]{}01";
 const PUBLIC_REQUIRED_CHANNEL_URL =
@@ -267,7 +268,7 @@ export function MiniAppHome() {
             <div className="min-w-0 text-center">
               <GlitchBrand />
               <p className="mt-2 text-[0.54rem] uppercase text-ascii-white/62 min-[390px]:text-[0.62rem]">
-                text / image / video ascii converter
+                text / image / video / murmuration / tamagotchi
               </p>
             </div>
           </div>
@@ -277,16 +278,22 @@ export function MiniAppHome() {
           <>
             <nav
               aria-label="ASCIILOGRAPH generator mode"
-              className="mt-3 grid grid-cols-4 bg-black/72"
+              className="mt-3 grid grid-cols-5 bg-black/72"
             >
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;
+                const shortLabel =
+                  tab === "MURMURATION"
+                    ? "MURMUR"
+                    : tab === "TAMAGOTCHI"
+                      ? "TAMA"
+                      : tab;
 
                 return (
                   <button
                     aria-pressed={isActive}
                     className={
-                      "min-h-11 border-r border-ascii-green/20 px-2 text-xs font-black transition last:border-r-0 " +
+                      "min-h-11 border-r border-ascii-green/20 px-1 text-[10px] min-[390px]:text-xs font-black transition last:border-r-0 truncate " +
                       (isActive
                         ? "bg-ascii-green text-black"
                         : "bg-transparent text-ascii-green/78 hover:bg-ascii-green/10 hover:text-ascii-green")
@@ -295,7 +302,10 @@ export function MiniAppHome() {
                     onClick={() => setActiveTab(tab)}
                     type="button"
                   >
-                    {tab}
+                    <span className="hidden min-[420px]:inline">
+                      {tab === "MURMURATION" ? "MURMUR" : tab}
+                    </span>
+                    <span className="min-[420px]:hidden">{shortLabel}</span>
                   </button>
                 );
               })}
@@ -304,7 +314,7 @@ export function MiniAppHome() {
             <section className="terminal-scanlines mt-3 bg-black/58 p-3 backdrop-blur-[1px]">
               <div className="flex items-center justify-between gap-3 pb-2">
                 <h2 className="text-sm font-black uppercase text-ascii-white/78">
-                  {activeTab} GENERATOR
+                  {activeTab} {activeTab === "TAMAGOTCHI" ? "CYBER PET" : "GENERATOR"}
                 </h2>
                 <span className="text-[0.58rem] uppercase text-ascii-green/62">
                   / {activeLabel}
@@ -315,6 +325,7 @@ export function MiniAppHome() {
               {activeTab === "IMAGE" ? <ImageGenerator /> : null}
               {activeTab === "VIDEO" ? <VideoGenerator /> : null}
               {activeTab === "MURMURATION" ? <MurmurationGenerator /> : null}
+              {activeTab === "TAMAGOTCHI" ? <TamagotchiGenerator /> : null}
             </section>
           </>
         ) : (
