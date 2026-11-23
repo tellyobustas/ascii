@@ -50,11 +50,11 @@ export const IMAGE_CHARACTER_SETS = {
   },
   blocks: {
     label: "Blocks",
-    chars: " ░▒▓█",
+    chars: " .:-=+*#%@",
   },
   shadedBlocks: {
     label: "Soft shades",
-    chars: " .░▒▓█",
+    chars: " .:-=+*#%@",
   },
   binary: {
     label: "Binary",
@@ -62,7 +62,7 @@ export const IMAGE_CHARACTER_SETS = {
   },
   cyberWarez: {
     label: "Cyber Warez",
-    chars: " .:+*oO#%@█",
+    chars: " .:+*oO#%@",
   },
 } as const;
 

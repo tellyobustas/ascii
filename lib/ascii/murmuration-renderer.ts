@@ -25,14 +25,6 @@ export type RenderedMurmuration = {
   styleId: MurmurationStyleId;
 };
 
-function xml(value: string) {
-  return value.replace(/[&<>"']/g, (character) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[
-      character
-    ] ?? character,
-  );
-}
-
 function runFfmpeg(args: string[], cwd: string) {
   return new Promise<void>((resolve, reject) => {
     execFile(
@@ -48,6 +40,140 @@ function runFfmpeg(args: string[], cwd: string) {
       },
     );
   });
+}
+
+const PIXEL_CHARS: Record<string, readonly string[]> = {
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00010", "11100"],
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+  "/": ["00001", "00010", "00010", "00100", "01000", "01000", "10000"],
+  ":": ["00000", "01100", "01100", "00000", "01100", "01100", "00000"],
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  ".": ["00000", "00000", "00000", "00000", "00000", "01100", "01100"],
+  "[": ["01110", "01000", "01000", "01000", "01000", "01000", "01110"],
+  "]": ["01110", "00010", "00010", "00010", "00010", "00010", "01110"],
+};
+
+function renderPixelText(
+  text: string,
+  x: number,
+  y: number,
+  charWidth: number,
+  charHeight: number,
+  color: string,
+  align: "left" | "right" = "left",
+  opacity = 0.85,
+) {
+  const chars = Array.from(text.toUpperCase());
+  const spacing = charWidth * 0.28;
+  const totalWidth = chars.length * (charWidth + spacing) - spacing;
+  const startX = align === "right" ? x - totalWidth : x;
+  const rects: string[] = [];
+
+  const dotW = (charWidth / 5).toFixed(2);
+  const dotH = (charHeight / 7).toFixed(2);
+
+  for (let cIdx = 0; cIdx < chars.length; cIdx += 1) {
+    const char = chars[cIdx];
+    const pattern = PIXEL_CHARS[char];
+    if (!pattern) continue;
+    const cx = startX + cIdx * (charWidth + spacing);
+    for (let row = 0; row < 7; row += 1) {
+      for (let col = 0; col < 5; col += 1) {
+        if (pattern[row][col] === "1") {
+          const px = (cx + col * (charWidth / 5)).toFixed(2);
+          const py = (y + row * (charHeight / 7)).toFixed(2);
+          rects.push(`<rect x="${px}" y="${py}" width="${dotW}" height="${dotH}"/>`);
+        }
+      }
+    }
+  }
+
+  return `<g fill="${color}" opacity="${opacity}">${rects.join("")}</g>`;
+}
+
+function renderStarlingVector(
+  glyph: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  opacity: number,
+): string {
+  const op = opacity.toFixed(3);
+  const w = width * 0.46;
+  const h = height * 0.46;
+  const strokeW = Math.max(1, Math.min(width, height) * 0.13).toFixed(2);
+
+  switch (glyph) {
+    case "^": // Wings swept UP (flapping upstroke)
+      return `<path d="M ${(x - w).toFixed(2)} ${(y + h * 0.35).toFixed(2)} L ${x.toFixed(2)} ${(y - h * 0.45).toFixed(2)} L ${(x + w).toFixed(2)} ${(y + h * 0.35).toFixed(2)}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" stroke-linejoin="round" opacity="${op}"/>`;
+
+    case "v": // Wings swept DOWN (power downstroke)
+      return `<path d="M ${(x - w).toFixed(2)} ${(y - h * 0.35).toFixed(2)} L ${x.toFixed(2)} ${(y + h * 0.45).toFixed(2)} L ${(x + w).toFixed(2)} ${(y - h * 0.35).toFixed(2)}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" stroke-linejoin="round" opacity="${op}"/>`;
+
+    case "/":
+    case "<": // Banking turn left
+      return `<path d="M ${(x - w * 0.8).toFixed(2)} ${(y + h * 0.4).toFixed(2)} L ${x.toFixed(2)} ${(y - h * 0.1).toFixed(2)} L ${(x + w * 0.8).toFixed(2)} ${(y - h * 0.5).toFixed(2)}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" stroke-linejoin="round" opacity="${op}"/>`;
+
+    case "\\":
+    case ">": // Banking turn right
+      return `<path d="M ${(x - w * 0.8).toFixed(2)} ${(y - h * 0.5).toFixed(2)} L ${x.toFixed(2)} ${(y - h * 0.1).toFixed(2)} L ${(x + w * 0.8).toFixed(2)} ${(y + h * 0.4).toFixed(2)}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" stroke-linejoin="round" opacity="${op}"/>`;
+
+    case "-":
+    case "~": // Flat glide
+      return `<path d="M ${(x - w).toFixed(2)} ${y.toFixed(2)} Q ${x.toFixed(2)} ${(y - h * 0.25).toFixed(2)} ${(x + w).toFixed(2)} ${y.toFixed(2)}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${op}"/>`;
+
+    case ".": // Far distance speck
+      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(Math.min(w, h) * 0.4).toFixed(2)}" fill="${color}" opacity="${op}"/>`;
+
+    case "x": // Fast crossing bird
+      return `<path d="M ${(x - w * 0.6).toFixed(2)} ${(y - h * 0.4).toFixed(2)} L ${(x + w * 0.6).toFixed(2)} ${(y + h * 0.4).toFixed(2)} M ${(x + w * 0.6).toFixed(2)} ${(y - h * 0.4).toFixed(2)} L ${(x - w * 0.6).toFixed(2)} ${(y + h * 0.4).toFixed(2)}" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${op}"/>`;
+
+    case "+":
+      return `<path d="M ${(x - w * 0.6).toFixed(2)} ${y.toFixed(2)} L ${(x + w * 0.6).toFixed(2)} ${y.toFixed(2)} M ${x.toFixed(2)} ${(y - h * 0.5).toFixed(2)} L ${x.toFixed(2)} ${(y + h * 0.5).toFixed(2)}" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${op}"/>`;
+
+    case "*": // Star flare in dense cluster
+      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(Math.min(w, h) * 0.6).toFixed(2)}" fill="${color}" opacity="${op}"/>`;
+
+    default: // Dense cluster node (M, B, 8, #, @, %)
+      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(Math.min(w, h) * 0.85).toFixed(2)}" fill="${color}" opacity="${op}"/>`;
+  }
 }
 
 function renderFrame(
@@ -71,7 +197,15 @@ function renderFrame(
     const cellColor = motion.color || style.color;
 
     nodes.push(
-      `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" fill="${cellColor}" opacity="${opacity.toFixed(3)}">${xml(motion.glyph)}</text>`,
+      renderStarlingVector(
+        motion.glyph,
+        x,
+        y,
+        size.cellWidth,
+        size.cellHeight,
+        cellColor,
+        opacity,
+      ),
     );
 
     // Starlings peeling off in wide aerial sweeps (outer whispers of the flock)
@@ -83,7 +217,15 @@ function renderFrame(
       const trailY = y - Math.sin(trailAngle) * size.cellHeight * 1.4;
       const trailGlyph = (cell.column + cell.row) % 2 === 0 ? "^" : "~";
       trails.push(
-        `<text x="${trailX.toFixed(2)}" y="${trailY.toFixed(2)}" font-size="${(size.fontSize * 0.72).toFixed(2)}" fill="${style.secondaryColor || style.color}" opacity="0.32">${trailGlyph}</text>`,
+        renderStarlingVector(
+          trailGlyph,
+          trailX,
+          trailY,
+          size.cellWidth * 0.75,
+          size.cellHeight * 0.75,
+          style.secondaryColor || style.color,
+          0.32,
+        ),
       );
     }
   }
@@ -101,6 +243,8 @@ function renderFrame(
 
   const hudHeader = `MURMURATION // ${style.label.toUpperCase()}`;
   const hudFrame = `BOIDS FLOCK [${String(frameIndex + 1).padStart(2, "0")}/${totalFrames}]`;
+  const hudW = Math.max(5, Math.min(7.5, size.width * 0.012));
+  const hudH = hudW * 1.45;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">
@@ -125,17 +269,15 @@ function renderFrame(
     </pattern>
   </defs>
   <rect x="1" y="1" width="${size.width - 2}" height="${size.height - 2}" fill="none" stroke="${style.borderColor}" stroke-width="1.5"/>
-  <g font-family="monospace" font-size="${size.fontSize.toFixed(2)}" text-anchor="middle" filter="url(#glow)">${nodes.join("")}</g>
-  <g font-family="monospace" text-anchor="middle">${trails.join("")}</g>
+  <g filter="url(#glow)">${nodes.join("")}</g>
+  <g>${trails.join("")}</g>
   <rect width="100%" height="100%" fill="url(#scanlines)"/>
   <rect width="100%" height="100%" fill="url(#skyVignette)"/>
   ${corners}
-  <g font-family="monospace" font-size="10" opacity="0.75">
-    <text x="${inset + bracketSize + 6}" y="${inset + 11}" fill="${style.secondaryColor || style.color}" letter-spacing="1.5">${hudHeader}</text>
-    <text x="${size.width - inset - bracketSize - 6}" y="${inset + 11}" text-anchor="end" fill="${style.color}" letter-spacing="1.5">${hudFrame}</text>
-    <text x="${inset + 8}" y="${size.height - inset - 5}" fill="${style.color}" letter-spacing="1.2">OCT.24.2001 // BIRD SWARM</text>
-    <text x="${size.width - inset - 8}" y="${size.height - inset - 5}" text-anchor="end" fill="${style.secondaryColor || style.color}" letter-spacing="1.2">ASCIILOGRAPH</text>
-  </g>
+  ${renderPixelText(hudHeader, inset + bracketSize + 6, inset + 4, hudW, hudH, style.secondaryColor || style.color, "left", 0.8)}
+  ${renderPixelText(hudFrame, size.width - inset - bracketSize - 6, inset + 4, hudW, hudH, style.color, "right", 0.8)}
+  ${renderPixelText("OCT.24.2001 // BIRD SWARM", inset + 8, size.height - inset - hudH - 4, hudW, hudH, style.color, "left", 0.8)}
+  ${renderPixelText("ASCIILOGRAPH", size.width - inset - 8, size.height - inset - hudH - 4, hudW, hudH, style.secondaryColor || style.color, "right", 0.8)}
 </svg>`;
 }
 

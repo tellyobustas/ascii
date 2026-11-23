@@ -9,7 +9,6 @@ export type RenderReceipt = {
 
 const WIDTH = 900;
 const HEIGHT = 1200;
-const GLYPHS = ".:+*xo01#%@$<>/\\";
 
 function random(seed: number) {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
@@ -24,7 +23,7 @@ function escapeXml(value: string) {
   );
 }
 
-function makeMurmuration(seed: number) {
+function makeMurmuration(seed: number, color: string) {
   const variant = Math.floor(random(seed) * 4);
   const centerX = variant === 0 ? 680 : variant === 1 ? 210 : 510;
   const centerY = variant === 0 ? 230 : variant === 1 ? 360 : 170;
@@ -38,9 +37,18 @@ function makeMurmuration(seed: number) {
     const x = centerX + Math.cos(angle) * stretchX * radius;
     const y = centerY + Math.sin(angle) * stretchY * radius;
     const size = 9 + random(seed + index * 3.8) * 18;
-    const glyph = GLYPHS[Math.floor(random(seed + index * 4.6) * GLYPHS.length)] ?? "+";
-    const opacity = 0.05 + random(seed + index * 8.2) * 0.2;
-    particles.push(`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${size.toFixed(1)}" opacity="${opacity.toFixed(2)}">${escapeXml(glyph)}</text>`);
+    const opacity = (0.05 + random(seed + index * 8.2) * 0.2).toFixed(2);
+    if (index % 3 === 0) {
+      const wing = size * 0.35;
+      particles.push(
+        `<path d="M ${(x - wing).toFixed(1)} ${(y + wing * 0.35).toFixed(1)} L ${x.toFixed(1)} ${(y - wing * 0.35).toFixed(1)} L ${(x + wing).toFixed(1)} ${(y + wing * 0.35).toFixed(1)}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`,
+      );
+    } else {
+      const r = (size * 0.18).toFixed(1);
+      particles.push(
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${color}" opacity="${opacity}"/>`,
+      );
+    }
   }
 
   return particles.join("");
@@ -101,12 +109,12 @@ export async function renderReceiptPng(receipt: RenderReceipt) {
     <pattern id="scanlines" width="1" height="8" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#ffffff" opacity=".055"/></pattern>
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     <style>
-      .mono { font-family: monospace; letter-spacing: 3px; }
-      .micro { font-family: monospace; letter-spacing: 2px; font-size: 18px; }
-      .parameter { font-family: monospace; letter-spacing: 2px; font-size: 25px; fill: ${parameterColor}; }
+      .mono { font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace; letter-spacing: 3px; }
+      .micro { font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace; letter-spacing: 2px; font-size: 18px; }
+      .parameter { font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace; letter-spacing: 2px; font-size: 25px; fill: ${parameterColor}; }
     </style>
   </defs>
-  <g fill="${primaryColor}" font-family="monospace" text-anchor="middle" filter="url(#glow)">${makeMurmuration(seed)}</g>
+  <g filter="url(#glow)">${makeMurmuration(seed, primaryColor)}</g>
   <rect width="100%" height="100%" fill="url(#scanlines)"/>
   <rect x="42" y="42" width="816" height="1116" fill="#000000" fill-opacity=".62" stroke="${primaryColor}" stroke-opacity=".5" stroke-width="2"/>
   <text x="74" y="100" class="micro" fill="${secondaryColor}">ASCIILOGRAPH / RENDER RECEIPT</text>

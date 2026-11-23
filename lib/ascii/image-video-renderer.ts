@@ -319,7 +319,7 @@ function renderGlitchOverlay(
       width * 0.5,
     )}" y="${svgNumber(
       height - 10,
-    )}" font-family="monospace" font-size="10" fill="#00f0ff" text-anchor="middle" letter-spacing="1.5">${timecode}</text></g>`,
+    )}" font-family="ui-monospace, monospace, sans-serif" font-size="10" fill="#00f0ff" text-anchor="middle" letter-spacing="1.5">${timecode}</text></g>`,
   );
 
   return `<g style="mix-blend-mode:screen">${parts.join("\n")}</g>`;

@@ -270,7 +270,7 @@ export function getMurmurationMotion(
     } else if (wingBeat > -0.6) {
       glyph = "v"; // Wings down
     } else {
-      glyph = "·"; // Speck
+      glyph = "."; // Speck
     }
   } else if (!isDenseCore) {
     // Mid-density flock: bird silhouettes
@@ -285,7 +285,7 @@ export function getMurmurationMotion(
     }
   } else {
     // Dense flock core: tight cluster
-    const coreFlock = "*#@%&8BЖ";
+    const coreFlock = "*#@%&8BM";
     const coreIndex = Math.min(
       coreFlock.length - 1,
       Math.floor(cell.tone * coreFlock.length),
