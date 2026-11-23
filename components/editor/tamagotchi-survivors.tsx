@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   WEAPON_REGISTRY,
   type ActiveWeapon,
@@ -251,11 +252,32 @@ export function TamagotchiSurvivors({
   const hasRevive = (skillTree.SECOND_CHANCE ?? 0) > 0;
 
   // React states (Only used for pause modals to ensure 0% React re-render churn during 60fps play)
+  const [mounted, setMounted] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isLevelingUp, setIsLevelingUp] = useState(false);
   const [upgradeCards, setUpgradeCards] = useState<UpgradeCard[]>([]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [runWon, setRunWon] = useState(false);
   const [isExtracted, setIsExtracted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    window.scrollTo(0, 0);
+  }, []);
+
+  const handleTogglePause = () => {
+    if (isGameOver || isLevelingUp) return;
+    setIsPaused((prev) => {
+      const next = !prev;
+      if (next) {
+        playSound("combo", tamagotchi.soundEnabled);
+        triggerHaptic("medium");
+      } else {
+        triggerHaptic("light");
+      }
+      return next;
+    });
+  };
 
   // Direct HUD DOM references (High-performance zero React overhead)
   const hudTimeRef = useRef<HTMLSpanElement | null>(null);
@@ -409,6 +431,12 @@ export function TamagotchiSurvivors({
   // Keyboard listeners for desktop support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "p" || e.key === "P") {
+        if (!isGameOver && !isLevelingUp) {
+          handleTogglePause();
+          return;
+        }
+      }
       keysRef.current[e.key.toLowerCase()] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -420,7 +448,7 @@ export function TamagotchiSurvivors({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, []);
+  }, [isGameOver, isLevelingUp]);
 
   // Direct DOM Touch / Drag Controls: ZERO React re-renders on touch move!
   const updateControlVector = (
@@ -453,6 +481,7 @@ export function TamagotchiSurvivors({
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (isPaused || isLevelingUp || isGameOver) return;
     if ((e.target as HTMLElement)?.closest("button")) return;
 
     const joystickElem = document.getElementById("survivors-joystick");
@@ -469,6 +498,7 @@ export function TamagotchiSurvivors({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (isPaused || isLevelingUp || isGameOver) return;
     if (!dragOriginRef.current) return;
     updateControlVector(
       e.clientX,
@@ -564,8 +594,8 @@ export function TamagotchiSurvivors({
       const dt = Math.min(Math.max(rawDelta, 0.008), 0.05);
       lastTimestamp = timestamp;
 
-      // Pause during Level-Up
-      if (isLevelingUp || isGameOver) {
+      // Pause during Level-Up, Game Over, or manual Pause
+      if (isLevelingUp || isGameOver || isPaused) {
         return;
       }
 
@@ -1913,6 +1943,7 @@ export function TamagotchiSurvivors({
     animationId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationId);
   }, [
+    isPaused,
     isLevelingUp,
     isGameOver,
     tamagotchi.stage,
@@ -1969,30 +2000,42 @@ export function TamagotchiSurvivors({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  return (
+  if (!mounted || typeof document === "undefined") {
+    return null;
+  }
+
+  const content = (
     <div
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="fixed inset-0 h-[100dvh] max-h-[100dvh] z-50 flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-[100dvh] max-h-[100dvh] z-[999999] flex flex-col bg-black text-white font-mono select-none overflow-hidden touch-none overscroll-none"
     >
-      {/* Sleek Minimal Top HUD: Dropped below iPhone 15 Pro Max Dynamic Island */}
-      <div className="relative z-20 flex flex-col border-b border-white/20 bg-black/95 px-3 pt-[max(env(safe-area-inset-top),3.25rem)] pb-2 text-xs touch-none select-none">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold">
-            <span ref={hudTimeRef} className="text-yellow-400 text-sm font-black">
+      {/* Sleek Minimal Top HUD: Padded below iPhone 15 Pro Max Dynamic Island & notch */}
+      <div
+        className="relative z-20 flex flex-col border-b border-white/20 bg-black/95 pb-2 text-xs touch-none select-none"
+        style={{
+          paddingTop: "max(calc(env(safe-area-inset-top, 0px) + 8px), 54px)",
+          paddingLeft: "max(env(safe-area-inset-left, 0px), 12px)",
+          paddingRight: "max(env(safe-area-inset-right, 0px), 12px)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-1.5">
+          {/* Left stats: Time, Kills, Bytes, Buff */}
+          <div className="flex items-center gap-2 font-bold min-w-0">
+            <span ref={hudTimeRef} className="text-yellow-400 text-sm font-black whitespace-nowrap">
               ⏱ 00:00
             </span>
-            <span ref={hudKillsRef} className="text-white/70 text-[0.70rem]">
+            <span ref={hudKillsRef} className="text-white/70 text-[0.70rem] whitespace-nowrap">
               💀 0
             </span>
-            <span ref={hudBytesRef} className="text-yellow-400 text-[0.70rem]">
+            <span ref={hudBytesRef} className="text-yellow-400 text-[0.70rem] whitespace-nowrap">
               💰 0
             </span>
             {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
               <span
-                className="px-1.5 py-0.2 border text-[0.55rem] font-black uppercase"
+                className="px-1.5 py-0.2 border text-[0.55rem] font-black uppercase whitespace-nowrap hidden min-[360px]:inline-block"
                 style={{
                   borderColor: COMBAT_BUFFS[activeBuff].color,
                   color: COMBAT_BUFFS[activeBuff].color,
@@ -2006,16 +2049,17 @@ export function TamagotchiSurvivors({
           {/* Compass / Extraction Radar indicator (3+ min) */}
           <div
             ref={hudExtractionRef}
-            className="hidden items-center gap-1 px-1.5 py-0.5 border border-cyan-400 text-cyan-300 bg-cyan-950/40 text-[0.55rem] font-bold animate-pulse"
+            className="hidden items-center gap-1 px-1.5 py-0.5 border border-cyan-400 text-cyan-300 bg-cyan-950/40 text-[0.55rem] font-bold animate-pulse whitespace-nowrap"
           >
             <span>🛸 ЭВАК: <span ref={hudExtractionDistRef}>0</span>м</span>
             <span ref={hudExtractionArrowRef} className="text-xs font-black">►</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right controls: Level badge + PAUSE button + EXIT button */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <span
               ref={hudLevelRef}
-              className="px-1.5 py-0.2 border text-[0.65rem] font-black"
+              className="px-1.5 py-0.5 border text-[0.65rem] font-black whitespace-nowrap"
               style={{
                 borderColor: themeColors.primary,
                 color: themeColors.primary,
@@ -2024,11 +2068,20 @@ export function TamagotchiSurvivors({
               УР. 1
             </span>
             <button
-              onClick={onClose}
+              onClick={handleTogglePause}
               type="button"
-              className="text-white/50 hover:text-white text-xs px-1"
+              className="flex items-center justify-center border border-yellow-400/80 bg-yellow-950/50 hover:bg-yellow-900/60 active:scale-95 text-yellow-300 px-2 py-0.5 text-xs font-black transition rounded"
+              title="Пауза"
             >
-              [✕]
+              ⏸
+            </button>
+            <button
+              onClick={handleTogglePause}
+              type="button"
+              className="flex items-center justify-center border border-white/30 hover:border-white/60 active:scale-95 text-white/70 hover:text-white text-xs px-1.5 py-0.5 transition rounded"
+              title="Пауза и выход"
+            >
+              ✕
             </button>
           </div>
         </div>
@@ -2104,6 +2157,115 @@ export function TamagotchiSurvivors({
           </div>
         </div>
       </div>
+
+      {/* In-Run Tactical Pause Modal */}
+      {isPaused && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3">
+          <div
+            className="allow-scroll terminal-scanlines relative flex w-full max-w-sm flex-col border-2 bg-black/95 p-5 shadow-2xl font-mono text-center"
+            style={{
+              borderColor: "#ffcc00",
+              boxShadow: "0 0 30px rgba(255, 204, 0, 0.35)",
+            }}
+          >
+            <div className="border-b border-white/20 pb-2">
+              <h2 className="text-sm font-black uppercase tracking-wider text-yellow-400">
+                ⏸ ТАКТИЧЕСКАЯ ПАУЗА
+              </h2>
+              <p className="text-[0.60rem] text-white/60 mt-0.5">
+                Боевые действия временно приостановлены
+              </p>
+            </div>
+
+            {/* Run summary stats */}
+            <div className="my-3 grid grid-cols-2 gap-2 border border-white/10 bg-black/60 p-2.5 text-xs text-left">
+              <div>
+                <span className="text-white/40 text-[0.52rem] block">ВРЕМЯ</span>
+                <span className="font-bold text-yellow-400">
+                  {formatTime(Math.floor(runSecondsRef.current))}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-white/40 text-[0.52rem] block">УНИЧТОЖЕНО</span>
+                <span className="font-bold text-white">{killsRef.current}</span>
+              </div>
+              <div className="mt-1">
+                <span className="text-white/40 text-[0.52rem] block">УРОВЕНЬ</span>
+                <span className="font-bold text-cyan-400">УР. {levelRef.current}</span>
+              </div>
+              <div className="mt-1 text-right">
+                <span className="text-white/40 text-[0.52rem] block">БАЙТЫ</span>
+                <span className="font-bold text-yellow-400">+{bytesRef.current} B</span>
+              </div>
+              <div className="col-span-2 mt-1 border-t border-white/10 pt-1.5 flex justify-between items-center text-[0.60rem]">
+                <span className="text-white/50">ЗДОРОВЬЕ:</span>
+                <span className="font-bold text-green-400">
+                  {Math.max(0, Math.round(playerRef.current.hp))} / {playerRef.current.maxHp} HP
+                </span>
+              </div>
+              {activeBuff && activeBuff !== "NONE" && COMBAT_BUFFS[activeBuff] && (
+                <div className="col-span-2 border-t border-white/10 pt-1 flex justify-between items-center text-[0.60rem]">
+                  <span className="text-white/50">МОДУЛЬ:</span>
+                  <span
+                    className="font-bold"
+                    style={{ color: COMBAT_BUFFS[activeBuff].color }}
+                  >
+                    {COMBAT_BUFFS[activeBuff].nameRu}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Equipped weapons */}
+            <div className="mb-3 border border-white/10 bg-black/40 p-2 text-left">
+              <span className="text-[0.52rem] text-white/50 block mb-1">
+                ВООРУЖЕНИЕ В РЕЙДЕ:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {weaponsRef.current.map((w) => (
+                  <span
+                    key={w.id}
+                    className="px-1.5 py-0.5 border text-[0.58rem] font-bold"
+                    style={{
+                      borderColor: themeColors.border,
+                      color: themeColors.primary,
+                    }}
+                  >
+                    {WEAPON_REGISTRY[w.id]?.nameRu ?? w.id} (Ур.{Math.floor(w.level)})
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setIsPaused(false)}
+                type="button"
+                className="w-full border py-2.5 text-xs font-black uppercase tracking-wider transition active:scale-95"
+                style={{
+                  borderColor: themeColors.primary,
+                  backgroundColor: themeColors.primary,
+                  color: "#000",
+                }}
+              >
+                ► ПРОДОЛЖИТЬ РЕЙД
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsPaused(false);
+                  handleCompleteRun();
+                }}
+                type="button"
+                className="w-full border border-red-500/50 bg-red-950/20 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-red-400 hover:bg-red-900/40 active:scale-95 transition"
+              >
+                ✕ СДАТЬСЯ И ЗАБРАТЬ ДОБЫЧУ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* In-Run Level Up Card Selection Modal */}
       {isLevelingUp && (
@@ -2236,4 +2398,6 @@ export function TamagotchiSurvivors({
       )}
     </div>
   );
+
+  return createPortal(content, document.body);
 }

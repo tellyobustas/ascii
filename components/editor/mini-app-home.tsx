@@ -262,7 +262,7 @@ export function MiniAppHome() {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-transparent text-ascii-white">
       <section className="relative z-10 mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <header className="bg-black/30 p-3 backdrop-blur-[1px]">
+        <header className="bg-black/50 p-3">
           <div className="grid gap-3">
             <AsciilographMark />
             <div className="min-w-0 text-center">
@@ -315,7 +315,7 @@ export function MiniAppHome() {
               })}
             </nav>
 
-            <section className="terminal-scanlines mt-3 bg-black/58 p-3 backdrop-blur-[1px]">
+            <section className="terminal-scanlines mt-3 bg-black/75 p-3">
               <div className="flex items-center justify-between gap-3 pb-2">
                 <h2 className="text-sm font-black uppercase text-ascii-white/78">
                   {activeTab === "TAMAGOTCHI"
